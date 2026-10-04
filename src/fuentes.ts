@@ -1,6 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Fuente, type Jornada } from './db'
-import { claveJornada, lunesDe, pendientesDiarios, resumirMes, type ResumenMes } from './diario'
+import {
+  claveJornada,
+  lunesDe,
+  pendientesDiarios,
+  proyectarMes,
+  resumirMes,
+  type Proyeccion,
+  type ResumenMes,
+} from './diario'
 import { hoy } from './fechas'
 
 export interface DiaConFuente {
@@ -61,11 +69,15 @@ export async function eliminarFuente(id: number): Promise<void> {
 export interface ResumenFuente {
   fuente: Fuente
   resumen: ResumenMes
+  /** Lo registrado más lo que se ganaría cumpliendo la meta los días que faltan. */
+  proyeccion: Proyeccion
+  /** Ingresos que nacieron de las jornadas de este trabajo (para no contarlos dos veces en Presupuesto). */
+  idsMovimientos: number[]
 }
 
 /**
- * Resumen del mes de cada trabajo por días. El dinero sale de los ingresos registrados: si editas
- * el monto en Presupuesto se actualiza aquí, y si borras ese ingreso, el día deja de contar.
+ * Resumen y proyección del mes de cada trabajo por días. El dinero sale de los ingresos registrados:
+ * si editas el monto en Presupuesto se actualiza aquí, y si borras ese ingreso, el día deja de contar.
  */
 export function useResumenesJornadas(mes: string): ResumenFuente[] | undefined {
   return useLiveQuery(async () => {
@@ -78,22 +90,27 @@ export function useResumenesJornadas(mes: string): ResumenFuente[] | undefined {
       db.movimientos.where('fecha').between(desde, `${mes}-32`).toArray(),
     ])
     const montos = new Map(movimientos.map((m) => [m.id!, m.monto]))
-    const efectivo = (j: Jornada) =>
-      j.estado === 'descanso' ? 0 : j.movimientoId !== undefined ? montos.get(j.movimientoId) : j.monto
-    return fuentes.map((fuente) => ({
-      fuente,
-      resumen: resumirMes(
-        jornadas
-          .filter((j) => j.fuenteId === fuente.id)
-          .flatMap((j) => {
-            const monto = efectivo(j)
-            return monto === undefined ? [] : [{ fecha: j.fecha, estado: j.estado, monto }]
-          }),
-        mes,
-        fuente.metaDiaria,
-        hoy(),
-      ),
-    }))
+    // null = se borró el ingreso de esa jornada: el día sigue respondido, pero no suma nada.
+    const efectivo = (j: Jornada): number | null =>
+      j.estado === 'descanso' ? 0 : j.movimientoId !== undefined ? (montos.get(j.movimientoId) ?? null) : (j.monto ?? null)
+    return fuentes.map((fuente) => {
+      const propias = jornadas.filter((j) => j.fuenteId === fuente.id)
+      const montosJornada = propias.map((j) => ({ fecha: j.fecha, estado: j.estado, monto: efectivo(j) }))
+      return {
+        fuente,
+        resumen: resumirMes(montosJornada, mes, fuente.metaDiaria, hoy()),
+        proyeccion: proyectarMes({
+          mes,
+          metaDiaria: fuente.metaDiaria,
+          diasLibres: fuente.diasLibres,
+          creado: fuente.creado,
+          activo: fuente.activo,
+          hoy: hoy(),
+          jornadas: montosJornada,
+        }),
+        idsMovimientos: propias.flatMap((j) => (j.movimientoId !== undefined ? [j.movimientoId] : [])),
+      }
+    })
   }, [mes])
 }
 

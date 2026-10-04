@@ -349,3 +349,5 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .frente-meta.falta { color: var(--suave); font-weight: 500; }
 .meta-mes { margin: 6px 0 10px; }
 .frente-meta.falta, .frente-meta.arriba { margin-bottom: 14px; }
+
+.dato small.detalle-dato { font-size: 0.78rem; color: var(--suave); line-height: 1.35; }

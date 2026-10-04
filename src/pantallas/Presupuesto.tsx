@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
 import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import PendientesJornadas from '../componentes/PendientesJornadas'
@@ -25,16 +26,27 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   )
   const categorias = useLiveQuery(() => db.categorias.toArray())
   const promedio = usePromedioVariable(mes)
+  const trabajosVariables = useResumenesJornadas(mes)
 
-  if (!movimientos || !categorias) return null
+  if (!movimientos || !categorias || !trabajosVariables) return null
 
   const porId = new Map(categorias.map((c) => [c.id!, c]))
   const variableMes = movimientos.reduce(
     (s, m) => (m.tipo === 'ingreso' && porId.get(m.categoriaId)?.variable ? s + m.monto : s),
     0,
   )
-  const ingresos = suma(movimientos, 'ingreso')
   const gastos = suma(movimientos, 'gasto')
+
+  // Lo ganado en trabajos por días (Didi…) se muestra en su propio recuadro con su proyección,
+  // así que no se cuenta también en "Ingresos" para no sumarlo dos veces.
+  const idsDeJornadas = new Set(trabajosVariables.flatMap((t) => t.idsMovimientos))
+  const ingresosRegistrados = suma(movimientos, 'ingreso')
+  const ingresos = movimientos.reduce(
+    (s, m) => (m.tipo === 'ingreso' && !idsDeJornadas.has(m.id!) ? s + m.monto : s),
+    0,
+  )
+  const recuadrosVariables = trabajosVariables.filter((t) => t.proyeccion.proyectado > 0)
+  const proyectadoVariables = trabajosVariables.reduce((s, t) => s + t.proyeccion.proyectado, 0)
 
   const gastoPorCategoria = new Map<number, number>()
   for (const m of movimientos) {
@@ -51,7 +63,9 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   const dias = new Map<string, Movimiento[]>()
   for (const m of movimientos) dias.set(m.fecha, [...(dias.get(m.fecha) ?? []), m])
 
-  const balance = ingresos - gastos
+  // El balance cuenta lo ya recibido y, de los trabajos por días, lo que se ganaría cumpliendo la meta.
+  const balance = ingresos + proyectadoVariables - gastos
+  const balanceRegistrado = ingresosRegistrados - gastos
 
   return (
     <>
@@ -69,18 +83,39 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
         <div className="tarjeta dato">
           <span>Ingresos</span>
           <strong className="ingreso">{pesos(ingresos)}</strong>
+          {recuadrosVariables.length > 0 && (
+            <small className="detalle-dato">Sin {recuadrosVariables.map((t) => t.fuente.nombre).join(' ni ')}</small>
+          )}
         </div>
         <div className="tarjeta dato">
           <span>Gastos</span>
           <strong className="gasto">{pesos(gastos)}</strong>
         </div>
+        {recuadrosVariables.map(({ fuente, proyeccion }) => (
+          <div key={fuente.id} className="tarjeta dato ancho">
+            <span>{fuente.nombre} · proyección del mes</span>
+            <strong className="ingreso">{pesos(proyeccion.proyectado)}</strong>
+            <small className="detalle-dato">
+              Ya ganado {pesos(proyeccion.registrado)}
+              {proyeccion.diasSupuestos > 0 && (
+                <>
+                  {' '}+ {pesos(proyeccion.supuesto)} si cumples tu meta{' '}
+                  {proyeccion.diasSupuestos === 1 ? 'el día que falta' : `los ${proyeccion.diasSupuestos} días que faltan`}
+                </>
+              )}
+            </small>
+          </div>
+        ))}
         <div className="tarjeta dato ancho">
           <span>Balance del mes</span>
           <strong className={balance < 0 ? 'gasto' : 'ingreso'}>{pesos(balance)}</strong>
+          {recuadrosVariables.length > 0 && (
+            <small className="detalle-dato">Incluye la proyección de {recuadrosVariables.map((t) => t.fuente.nombre).join(' y ')}. Con lo ya registrado hasta hoy: {pesos(balanceRegistrado)}</small>
+          )}
         </div>
       </div>
 
-      <ResumenJornadas mes={mes} />
+      <ResumenJornadas mes={mes} resumenes={trabajosVariables} />
 
       {(variableMes > 0 || promedio) && (
         <section className="tarjeta">

@@ -1,22 +1,16 @@
 import { metaDelMes } from '../diario'
-import { hoy } from '../fechas'
 import { pesos } from '../formato'
-import { useResumenesJornadas } from '../fuentes'
+import type { ResumenFuente } from '../fuentes'
 import BarraProgreso from './BarraProgreso'
 
 /** Cómo va el mes en cada trabajo con meta diaria: ganado, promedio frente a la meta y la semana. */
-export default function ResumenJornadas({ mes }: { mes: string }) {
-  const resumenes = useResumenesJornadas(mes)
-  if (!resumenes) return null
-
+export default function ResumenJornadas({ mes, resumenes }: { mes: string; resumenes: ResumenFuente[] }) {
   return (
     <>
       {resumenes
         .filter(({ resumen }) => resumen.trabajados > 0 || resumen.descansos > 0)
-        .map(({ fuente, resumen }) => {
+        .map(({ fuente, resumen, proyeccion }) => {
           const metaMes = metaDelMes(mes, fuente.metaDiaria, fuente.diasLibres)
-          // Lo que aún se puede ganar: solo los días que quedan del mes (hoy ya cuenta como pasado).
-          const restante = metaDelMes(mes, fuente.metaDiaria, fuente.diasLibres, hoy())
           return (
           <section key={fuente.id} className="tarjeta">
             <h2>{fuente.nombre} este mes</h2>
@@ -24,12 +18,13 @@ export default function ResumenJornadas({ mes }: { mes: string }) {
               <span>Ganado ({resumen.trabajados} {resumen.trabajados === 1 ? 'día trabajado' : 'días trabajados'})</span>
               <strong className="ingreso">{pesos(resumen.ganado)}</strong>
             </p>
-            {restante.dias > 0 && (
+            {proyeccion.diasSupuestos > 0 && (
               <p className="fila-dato">
                 <span>
-                  Si cumples tu meta {restante.dias === 1 ? 'el día que queda' : `los ${restante.dias} días que quedan`}
+                  Si cumples tu meta{' '}
+                  {proyeccion.diasSupuestos === 1 ? 'el día que falta' : `los ${proyeccion.diasSupuestos} días que faltan`}
                 </span>
-                <strong>{pesos(restante.total)}</strong>
+                <strong>{pesos(proyeccion.supuesto)}</strong>
               </p>
             )}
             <div className="meta-mes">

@@ -63,23 +63,14 @@ export function pendientesDiarios(programas: ProgramaDiario[], resueltas: Set<st
 }
 
 /**
- * Lo que se ganaría cumpliendo la meta cada día que se puede trabajar (todos los días menos los de
- * la semana en que nunca se trabaja). Sin `hoy` cuenta el mes completo. Con `hoy` cuenta solo los
- * días que quedan: hoy ya cuenta como pasado, así que se cuenta desde mañana. Si el mes ya terminó
- * no queda ninguno, y si todavía no empieza se cuenta completo.
+ * Lo que se ganaría en el mes completo cumpliendo la meta cada día que se puede trabajar
+ * (todos los días menos los de la semana en que nunca se trabaja).
  */
-export function metaDelMes(
-  mes: string,
-  metaDiaria: number,
-  diasLibres: number[],
-  hoy?: string,
-): { dias: number; total: number } {
+export function metaDelMes(mes: string, metaDiaria: number, diasLibres: number[]): { dias: number; total: number } {
   const [anio, m] = mes.split('-').map(Number)
   const diasEnMes = new Date(anio, m, 0).getDate()
-  const mesDeHoy = hoy?.slice(0, 7)
-  const primerDia = hoy === undefined || mesDeHoy! < mes ? 1 : mesDeHoy === mes ? Number(hoy.slice(8, 10)) + 1 : diasEnMes + 1
   let dias = 0
-  for (let d = primerDia; d <= diasEnMes; d++) {
+  for (let d = 1; d <= diasEnMes; d++) {
     if (!diasLibres.includes(new Date(anio, m - 1, d).getDay())) dias++
   }
   return { dias, total: dias * metaDiaria }
@@ -88,8 +79,62 @@ export function metaDelMes(
 export interface JornadaMonto {
   fecha: string
   estado: 'trabajada' | 'descanso'
-  /** Pesos realmente ganados ese día (0 si fue descanso). */
-  monto: number
+  /** Pesos realmente ganados ese día (0 si fue descanso); null si se borró el ingreso de esa jornada. */
+  monto: number | null
+}
+
+export interface Proyeccion {
+  /** Lo ya registrado como ganado en el mes. */
+  registrado: number
+  /** Lo que se supone que se ganará en los días aún abiertos, cumpliendo la meta cada uno. */
+  supuesto: number
+  /** Cuántos días siguen abiertos (sin responder y que todavía se pueden registrar o trabajar). */
+  diasSupuestos: number
+  /** Registrado + supuesto: lo que se ganaría en el mes si se cumple la meta los días que faltan. */
+  proyectado: number
+}
+
+/**
+ * Proyección del mes de un trabajo por días. Cada día del mes aporta así:
+ *  - con jornada registrada: lo realmente ganado (0 si fue descanso);
+ *  - sin jornada, y que se puede trabajar: el valor de la meta, mientras el día siga abierto, es decir
+ *    desde hoy hacia atrás hasta donde la app aún lo pregunta, y todo lo que falta del mes;
+ *  - los demás días (libres, anteriores al inicio del trabajo o demasiado viejos): nada.
+ * Así, al responder un día, la proyección baja si no se trabajó o se ganó menos que la meta, y sube si se ganó más.
+ */
+export function proyectarMes(datos: {
+  mes: string
+  metaDiaria: number
+  diasLibres: number[]
+  creado: string
+  activo: boolean
+  hoy: string
+  jornadas: JornadaMonto[]
+}): Proyeccion {
+  const { mes, metaDiaria, diasLibres, creado, activo, hoy, jornadas } = datos
+  const [anio, m] = mes.split('-').map(Number)
+  const diasEnMes = new Date(anio, m, 0).getDate()
+  const porFecha = new Map(jornadas.map((j) => [j.fecha, j]))
+  const piso = sumarDias(hoy, -(VENTANA_JORNADAS - 1))
+
+  let registrado = 0
+  let diasSupuestos = 0
+  for (let d = 1; d <= diasEnMes; d++) {
+    const fecha = `${mes}-${dos(d)}`
+    const jornada = porFecha.get(fecha)
+    if (jornada) {
+      registrado += jornada.estado === 'trabajada' ? (jornada.monto ?? 0) : 0
+    } else if (
+      activo &&
+      !diasLibres.includes(new Date(anio, m - 1, d).getDay()) &&
+      fecha >= creado &&
+      fecha >= piso
+    ) {
+      diasSupuestos++
+    }
+  }
+  const supuesto = diasSupuestos * metaDiaria
+  return { registrado, supuesto, diasSupuestos, proyectado: registrado + supuesto }
 }
 
 export interface ResumenMes {
@@ -112,18 +157,20 @@ export function lunesDe(fecha: string): string {
 
 export function resumirMes(jornadas: JornadaMonto[], mes: string, metaDiaria: number, hoy: string): ResumenMes {
   const delMes = jornadas.filter((j) => j.fecha.startsWith(mes))
-  const trabajadas = delMes.filter((j) => j.estado === 'trabajada')
+  // Una jornada cuyo ingreso se borró no cuenta como día trabajado ni suma dinero.
+  const conMonto = (j: JornadaMonto): j is JornadaMonto & { monto: number } => j.estado === 'trabajada' && j.monto !== null
+  const trabajadas = delMes.filter(conMonto)
   const ganado = trabajadas.reduce((s, j) => s + j.monto, 0)
   const promedio = trabajadas.length > 0 ? Math.round(ganado / trabajadas.length) : null
   const lunes = lunesDe(hoy)
   return {
     ganado,
     trabajados: trabajadas.length,
-    descansos: delMes.length - trabajadas.length,
+    descansos: delMes.filter((j) => j.estado === 'descanso').length,
     promedio,
     frenteAMeta: promedio === null ? null : promedio - metaDiaria,
     semana: hoy.startsWith(mes)
-      ? jornadas.filter((j) => j.estado === 'trabajada' && j.fecha >= lunes && j.fecha <= hoy).reduce((s, j) => s + j.monto, 0)
+      ? jornadas.filter(conMonto).filter((j) => j.fecha >= lunes && j.fecha <= hoy).reduce((s, j) => s + j.monto, 0)
       : null,
   }
 }
