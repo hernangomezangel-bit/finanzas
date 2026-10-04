@@ -52,6 +52,31 @@ export interface Ocurrencia {
   movimientoId?: number
 }
 
+/** Trabajo que se cobra por día y con monto variable (Didi, domicilios…), con una meta diaria de referencia. */
+export interface Fuente {
+  id?: number
+  nombre: string
+  /** Lo que quieres ganar cada día trabajado; es solo una referencia, nunca se registra solo. */
+  metaDiaria: number
+  /** Categoría de ingreso donde se registran las ganancias. */
+  categoriaId: number
+  /** Días de la semana en que nunca trabajas (0 = domingo … 6 = sábado), p. ej. pico y placa. */
+  diasLibres: number[]
+  creado: string
+  activo: boolean
+}
+
+/** Qué pasó un día concreto con un trabajo por días. */
+export interface Jornada {
+  id?: number
+  fuenteId: number
+  fecha: string
+  estado: 'trabajada' | 'descanso'
+  /** Lo registrado ese día; solo en jornadas trabajadas. */
+  monto?: number
+  movimientoId?: number
+}
+
 export type TipoMeta = 'inversion' | 'gasto'
 
 export interface Meta {
@@ -144,6 +169,8 @@ class BaseFinanzas extends Dexie {
   ajustes!: Table<Ajuste, string>
   recurrentes!: Table<Recurrente, number>
   ocurrencias!: Table<Ocurrencia, number>
+  fuentes!: Table<Fuente, number>
+  jornadas!: Table<Jornada, number>
 
   constructor() {
     super('finanzas')
@@ -187,6 +214,10 @@ class BaseFinanzas extends Dexie {
           await categorias.add(CATEGORIA_COMISIONES)
         }
       })
+    this.version(5).stores({
+      fuentes: '++id',
+      jornadas: '++id, fuenteId, fecha',
+    })
     this.on('populate', (tx) => {
       tx.table('categorias').bulkAdd(CATEGORIAS_INICIALES)
     })

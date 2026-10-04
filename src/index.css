@@ -320,3 +320,28 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .fila-dato span { color: var(--suave); }
 .lista-cat .nombre small { display: block; margin: 0; }
 .dos-dias { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---------- Meta diaria de ingresos ---------- */
+.jornada + .jornada { border-top: 1px solid var(--borde); margin-top: 14px; padding-top: 14px; }
+.jornada h3 { margin: 0 0 2px; font-size: 1.05rem; }
+.boton.suave { background: none; color: var(--suave); }
+details.tarjeta > summary + .jornada { margin-top: 10px; }
+.frente-meta { margin: 0 0 8px; font-size: 0.9rem; font-weight: 600; }
+.frente-meta.arriba { color: #15803d; }
+.frente-meta.abajo { color: #b45309; }
+@media (prefers-color-scheme: dark) {
+  .frente-meta.arriba { color: #4ade80; }
+  .frente-meta.abajo { color: #fbbf24; }
+}
+.aviso-deshacer {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 30;
+  width: calc(100% - 32px); max-width: 528px; background: #1f2937; color: #fff;
+  border-radius: 12px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); font-size: 0.9rem;
+}
+.aviso-deshacer span { flex: 1; line-height: 1.35; }
+.aviso-deshacer button {
+  min-height: 44px; padding: 0 14px; border: 0; border-radius: 8px; background: none;
+  color: #5eead4; font: inherit; font-weight: 700; cursor: pointer;
+}

@@ -4,6 +4,8 @@ import {
   type Aporte,
   type Categoria,
   type Deuda,
+  type Fuente,
+  type Jornada,
   type Meta,
   type Movimiento,
   type Ocurrencia,
@@ -20,8 +22,9 @@ import type { TipoTasa } from './plan'
  * Versión 1: categorías y movimientos. Versión 2: agrega metas y aportes de ahorro.
  * Versión 3: agrega deudas, pagos de deudas y las preferencias del plan.
  * Versión 4: agrega movimientos recurrentes y sus vencimientos, y marca los ingresos variables.
+ * Versión 5: agrega los trabajos por días con meta diaria y sus jornadas.
  */
-export const VERSION_RESPALDO = 4
+export const VERSION_RESPALDO = 5
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -37,13 +40,18 @@ export interface Respaldo {
   ajustes: Ajuste[]
   recurrentes: Recurrente[]
   ocurrencias: Ocurrencia[]
+  fuentes: Fuente[]
+  jornadas: Jornada[]
 }
 
 export async function crearRespaldo(): Promise<Respaldo> {
   // Una sola lectura para que todas las tablas queden coherentes entre sí.
   return db.transaction(
     'r',
-    [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes, db.recurrentes, db.ocurrencias],
+    [
+      db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes,
+      db.recurrentes, db.ocurrencias, db.fuentes, db.jornadas,
+    ],
     async () => ({
       app: 'mis-finanzas' as const,
       version: VERSION_RESPALDO,
@@ -57,6 +65,8 @@ export async function crearRespaldo(): Promise<Respaldo> {
       ajustes: await db.ajustes.toArray(),
       recurrentes: await db.recurrentes.toArray(),
       ocurrencias: await db.ocurrencias.toArray(),
+      fuentes: await db.fuentes.toArray(),
+      jornadas: await db.jornadas.toArray(),
     }),
   )
 }
@@ -131,6 +141,47 @@ function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, C
     dias: [...new Set(r.dias as number[])].sort((a, b) => a - b),
     creado: r.creado,
     activo: r.activo,
+  }
+}
+
+function validarFuente(f: unknown, i: number, categoriasPorId: Map<number, Categoria>): Fuente {
+  if (!esObjeto(f)) return falla(`El trabajo por días ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(f.id) || f.id <= 0) return falla(`El trabajo por días ${i + 1} no tiene un identificador válido.`)
+  if (typeof f.nombre !== 'string' || !f.nombre.trim() || f.nombre.length > 40) return falla(`El trabajo por días ${i + 1} tiene un nombre no válido.`)
+  if (!esEntero(f.metaDiaria) || f.metaDiaria <= 0) return falla(`"${f.nombre}" tiene una meta diaria no válida.`)
+  if (!esEntero(f.categoriaId) || !categoriasPorId.has(f.categoriaId)) return falla(`"${f.nombre}" usa una categoría que no existe en la copia.`)
+  if (!Array.isArray(f.diasLibres) || f.diasLibres.length > 6 || !f.diasLibres.every((d) => esEntero(d) && d >= 0 && d <= 6)) {
+    return falla(`"${f.nombre}" tiene días libres no válidos.`)
+  }
+  if (!esFechaValida(f.creado)) return falla(`"${f.nombre}" tiene una fecha de inicio no válida.`)
+  if (typeof f.activo !== 'boolean') return falla(`"${f.nombre}" tiene un dato no válido.`)
+  return {
+    id: f.id,
+    nombre: f.nombre,
+    metaDiaria: f.metaDiaria,
+    categoriaId: f.categoriaId,
+    diasLibres: [...new Set(f.diasLibres as number[])].sort((a, b) => a - b),
+    creado: f.creado,
+    activo: f.activo,
+  }
+}
+
+function validarJornada(j: unknown, i: number, fuentesPorId: Set<number>, movimientosPorId: Set<number>): Jornada {
+  if (!esObjeto(j)) return falla(`La jornada ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(j.id) || j.id <= 0) return falla(`La jornada ${i + 1} no tiene un identificador válido.`)
+  if (!esEntero(j.fuenteId) || !fuentesPorId.has(j.fuenteId)) return falla(`La jornada ${i + 1} usa un trabajo que no existe en la copia.`)
+  if (!esFechaValida(j.fecha)) return falla(`La jornada ${i + 1} tiene una fecha no válida.`)
+  if (j.estado !== 'trabajada' && j.estado !== 'descanso') return falla(`La jornada ${i + 1} tiene un estado no válido.`)
+  if (j.estado === 'trabajada' && (!esEntero(j.monto) || j.monto <= 0)) return falla(`La jornada ${i + 1} tiene un monto no válido.`)
+  if (j.movimientoId !== undefined && !esEntero(j.movimientoId)) return falla(`La jornada ${i + 1} tiene un dato no válido.`)
+  const enlazado = j.movimientoId !== undefined && movimientosPorId.has(j.movimientoId)
+  return {
+    id: j.id,
+    fuenteId: j.fuenteId,
+    fecha: j.fecha,
+    estado: j.estado,
+    ...(j.estado === 'trabajada' ? { monto: j.monto as number } : {}),
+    ...(enlazado ? { movimientoId: j.movimientoId as number } : {}),
   }
 }
 
@@ -292,10 +343,14 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   // Las de la versión 3 son anteriores a los recurrentes.
   const recurrentesCrudos = datos.version >= 4 ? datos.recurrentes : []
   const ocurrenciasCrudas = datos.version >= 4 ? datos.ocurrencias : []
+  // Las de la versión 4 son anteriores a los trabajos por días.
+  const fuentesCrudas = datos.version >= 5 ? datos.fuentes : []
+  const jornadasCrudas = datos.version >= 5 ? datos.jornadas : []
   if (
     !Array.isArray(metasCrudas) || !Array.isArray(aportesCrudos) ||
     !Array.isArray(deudasCrudas) || !Array.isArray(pagosCrudos) || !Array.isArray(ajustesCrudos) ||
-    !Array.isArray(recurrentesCrudos) || !Array.isArray(ocurrenciasCrudas)
+    !Array.isArray(recurrentesCrudos) || !Array.isArray(ocurrenciasCrudas) ||
+    !Array.isArray(fuentesCrudas) || !Array.isArray(jornadasCrudas)
   ) {
     falla('A la copia le faltan datos.')
   }
@@ -329,6 +384,13 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   )
   sinRepetidos(ocurrencias.map((o) => o.id!), 'identificadores de vencimiento')
 
+  const fuentes = fuentesCrudas.map((f, i) => validarFuente(f, i, categoriasPorId))
+  sinRepetidos(fuentes.map((f) => f.id!), 'identificadores de trabajo por días')
+  const jornadas = jornadasCrudas.map((j, i) =>
+    validarJornada(j, i, new Set(fuentes.map((f) => f.id!)), new Set(movimientos.map((m) => m.id!))),
+  )
+  sinRepetidos(jornadas.map((j) => j.id!), 'identificadores de jornada')
+
   return {
     app: 'mis-finanzas',
     version: datos.version,
@@ -342,13 +404,16 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
     ajustes,
     recurrentes,
     ocurrencias,
+    fuentes,
+    jornadas,
   }
 }
 
 /** Reemplaza todo lo que hay en el teléfono por el contenido de la copia (todo o nada). */
 export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
   const tablas = [
-    db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes, db.recurrentes, db.ocurrencias,
+    db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes,
+    db.recurrentes, db.ocurrencias, db.fuentes, db.jornadas,
   ]
   await db.transaction('rw', tablas, async () => {
     await Promise.all(tablas.map((t) => t.clear()))
@@ -361,6 +426,8 @@ export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
     await db.ajustes.bulkAdd(respaldo.ajustes)
     await db.recurrentes.bulkAdd(respaldo.recurrentes)
     await db.ocurrencias.bulkAdd(respaldo.ocurrencias)
+    await db.fuentes.bulkAdd(respaldo.fuentes)
+    await db.jornadas.bulkAdd(respaldo.jornadas)
   })
 }
 

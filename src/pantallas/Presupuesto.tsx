@@ -5,7 +5,9 @@ import { pesos } from '../formato'
 import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
 import { usePromedioVariable } from '../ingresos'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
+import PendientesJornadas from '../componentes/PendientesJornadas'
 import PendientesRecurrentes from '../componentes/PendientesRecurrentes'
+import ResumenJornadas from '../componentes/ResumenJornadas'
 import Dona, { type Tajada } from '../componentes/Dona'
 import FormMovimiento from './FormMovimiento'
 
@@ -54,6 +56,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   return (
     <>
       <AvisoRespaldo alIr={irARespaldo} />
+      <PendientesJornadas />
       <PendientesRecurrentes />
 
       <div className="selector-mes">
@@ -76,6 +79,8 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
           <strong className={balance < 0 ? 'gasto' : 'ingreso'}>{pesos(balance)}</strong>
         </div>
       </div>
+
+      <ResumenJornadas mes={mes} />
 
       {(variableMes > 0 || promedio) && (
         <section className="tarjeta">

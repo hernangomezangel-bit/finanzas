@@ -157,5 +157,5 @@ function textoDias(dias: number): string {
 
 /** Copia vacía solo para preguntarle al navegador si sabe compartir este tipo de archivo. */
 function vacio(): DatosRespaldo {
-  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [], deudas: [], pagosDeuda: [], ajustes: [], recurrentes: [], ocurrencias: [] }
+  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [], deudas: [], pagosDeuda: [], ajustes: [], recurrentes: [], ocurrencias: [], fuentes: [], jornadas: [] }
 }
