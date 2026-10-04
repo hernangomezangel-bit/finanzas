@@ -1,14 +1,20 @@
 import { useState } from 'react'
-import { pesos } from './formato'
+import Presupuesto from './pantallas/Presupuesto'
+import Categorias from './pantallas/Categorias'
 
 type Pestana = 'presupuesto' | 'ahorros' | 'deudas' | 'mas'
 
-const PESTANAS: { id: Pestana; icono: string; nombre: string; texto: string }[] = [
-  { id: 'presupuesto', icono: '💰', nombre: 'Presupuesto', texto: 'Aquí registrarás tus ingresos y gastos.' },
-  { id: 'ahorros', icono: '🎯', nombre: 'Ahorros', texto: 'Aquí crearás tus metas de ahorro.' },
-  { id: 'deudas', icono: '📉', nombre: 'Deudas', texto: 'Aquí armarás tu plan para pagar deudas.' },
-  { id: 'mas', icono: '⚙️', nombre: 'Más', texto: 'Aquí estará la copia de seguridad.' },
+const PESTANAS: { id: Pestana; icono: string; nombre: string }[] = [
+  { id: 'presupuesto', icono: '💰', nombre: 'Presupuesto' },
+  { id: 'ahorros', icono: '🎯', nombre: 'Ahorros' },
+  { id: 'deudas', icono: '📉', nombre: 'Deudas' },
+  { id: 'mas', icono: '⚙️', nombre: 'Más' },
 ]
+
+const PROXIMAMENTE: Partial<Record<Pestana, string>> = {
+  ahorros: 'Aquí crearás tus metas de ahorro. Llega en una fase próxima.',
+  deudas: 'Aquí armarás tu plan para pagar deudas. Llega en una fase próxima.',
+}
 
 export default function App() {
   const [activa, setActiva] = useState<Pestana>('presupuesto')
@@ -21,10 +27,13 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        <div className="tarjeta vacia">
-          <p>{actual.texto}</p>
-          <p className="pequeno">Prueba de formato: {pesos(1250000)}</p>
-        </div>
+        {activa === 'presupuesto' && <Presupuesto />}
+        {activa === 'mas' && <Categorias />}
+        {PROXIMAMENTE[activa] && (
+          <div className="tarjeta vacia">
+            <p>{PROXIMAMENTE[activa]}</p>
+          </div>
+        )}
       </main>
 
       <nav className="barra" aria-label="Secciones">
