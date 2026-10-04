@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Presupuesto from './pantallas/Presupuesto'
+import Ahorros from './pantallas/Ahorros'
 import Categorias from './pantallas/Categorias'
 import Respaldo from './pantallas/Respaldo'
 
@@ -13,7 +14,6 @@ const PESTANAS: { id: Pestana; icono: string; nombre: string }[] = [
 ]
 
 const PROXIMAMENTE: Partial<Record<Pestana, string>> = {
-  ahorros: 'Aquí crearás tus metas de ahorro. Llega en una fase próxima.',
   deudas: 'Aquí armarás tu plan para pagar deudas. Llega en una fase próxima.',
 }
 
@@ -29,6 +29,7 @@ export default function App() {
 
       <main className="contenido">
         {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} />}
+        {activa === 'ahorros' && <Ahorros />}
         {activa === 'mas' && (
           <>
             <Respaldo />

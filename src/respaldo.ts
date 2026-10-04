@@ -1,8 +1,11 @@
-import { db, type Categoria, type Movimiento, type Tipo } from './db'
+import { db, type Aporte, type Categoria, type Meta, type Movimiento, type Tipo, type TipoMeta } from './db'
 import { hoy } from './fechas'
 
-/** Súbelo cuando cambie la forma de la copia; así una app vieja no malinterpreta una copia nueva. */
-export const VERSION_RESPALDO = 1
+/**
+ * Súbelo cuando cambie la forma de la copia; así una app vieja no malinterpreta una copia nueva.
+ * Versión 1: categorías y movimientos. Versión 2: agrega metas y aportes de ahorro.
+ */
+export const VERSION_RESPALDO = 2
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -11,16 +14,20 @@ export interface Respaldo {
   exportadoEn: string
   categorias: Categoria[]
   movimientos: Movimiento[]
+  metas: Meta[]
+  aportes: Aporte[]
 }
 
 export async function crearRespaldo(): Promise<Respaldo> {
-  // Una sola lectura para que categorías y movimientos queden coherentes entre sí.
-  return db.transaction('r', db.categorias, db.movimientos, async () => ({
+  // Una sola lectura para que todas las tablas queden coherentes entre sí.
+  return db.transaction('r', db.categorias, db.movimientos, db.metas, db.aportes, async () => ({
     app: 'mis-finanzas' as const,
     version: VERSION_RESPALDO,
     exportadoEn: new Date().toISOString(),
     categorias: await db.categorias.toArray(),
     movimientos: await db.movimientos.toArray(),
+    metas: await db.metas.toArray(),
+    aportes: await db.aportes.toArray(),
   }))
 }
 
@@ -58,7 +65,59 @@ function validarCategoria(c: unknown, i: number): Categoria {
   if (!esTipo(c.tipo)) return falla(`La categoría "${c.nombre}" tiene un tipo no válido.`)
   if (typeof c.icono !== 'string' || c.icono.length > 8) return falla(`La categoría "${c.nombre}" tiene un ícono no válido.`)
   if (c.oculta !== undefined && typeof c.oculta !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
-  return { id: c.id, nombre: c.nombre, tipo: c.tipo, icono: c.icono, ...(c.oculta ? { oculta: true } : {}) }
+  if (c.clave !== undefined && c.clave !== 'ahorro') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
+  return {
+    id: c.id,
+    nombre: c.nombre,
+    tipo: c.tipo,
+    icono: c.icono,
+    ...(c.oculta ? { oculta: true } : {}),
+    ...(c.clave ? { clave: c.clave } : {}),
+  }
+}
+
+const esTipoMeta = (x: unknown): x is TipoMeta => x === 'inversion' || x === 'gasto'
+
+function validarMeta(m: unknown, i: number): Meta {
+  if (!esObjeto(m)) return falla(`La meta ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(m.id) || m.id <= 0) return falla(`La meta ${i + 1} no tiene un identificador válido.`)
+  if (typeof m.nombre !== 'string' || !m.nombre.trim() || m.nombre.length > 40) return falla(`La meta ${i + 1} tiene un nombre no válido.`)
+  if (!esTipoMeta(m.tipo)) return falla(`La meta "${m.nombre}" tiene un tipo no válido.`)
+  if (!esEntero(m.objetivo) || m.objetivo <= 0) return falla(`La meta "${m.nombre}" tiene un objetivo no válido.`)
+  if (m.fechaMeta !== undefined && !esFechaValida(m.fechaMeta)) return falla(`La meta "${m.nombre}" tiene una fecha no válida.`)
+  if (typeof m.icono !== 'string' || m.icono.length > 8) return falla(`La meta "${m.nombre}" tiene un ícono no válido.`)
+  if (!esFechaValida(m.creada)) return falla(`La meta "${m.nombre}" tiene una fecha de creación no válida.`)
+  if (m.archivada !== undefined && typeof m.archivada !== 'boolean') return falla(`La meta "${m.nombre}" tiene un dato no válido.`)
+  return {
+    id: m.id,
+    nombre: m.nombre,
+    tipo: m.tipo,
+    objetivo: m.objetivo,
+    icono: m.icono,
+    creada: m.creada,
+    ...(m.fechaMeta ? { fechaMeta: m.fechaMeta } : {}),
+    ...(m.archivada ? { archivada: true } : {}),
+  }
+}
+
+function validarAporte(a: unknown, i: number, metasPorId: Set<number>, movimientosPorId: Set<number>): Aporte {
+  if (!esObjeto(a)) return falla(`El aporte ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(a.id) || a.id <= 0) return falla(`El aporte ${i + 1} no tiene un identificador válido.`)
+  if (!esEntero(a.metaId) || !metasPorId.has(a.metaId)) return falla(`El aporte ${i + 1} usa una meta que no existe en la copia.`)
+  if (!esEntero(a.monto) || a.monto <= 0) return falla(`El aporte ${i + 1} tiene un monto no válido.`)
+  if (!esFechaValida(a.fecha)) return falla(`El aporte ${i + 1} tiene una fecha no válida.`)
+  if (typeof a.nota !== 'string' || a.nota.length > 200) return falla(`El aporte ${i + 1} tiene una nota no válida.`)
+  if (a.movimientoId !== undefined && !esEntero(a.movimientoId)) return falla(`El aporte ${i + 1} tiene un dato no válido.`)
+  // Si el gasto enlazado se borró del Presupuesto, el aporte sigue valiendo; solo se suelta el enlace.
+  const enlazado = a.movimientoId !== undefined && movimientosPorId.has(a.movimientoId)
+  return {
+    id: a.id,
+    metaId: a.metaId,
+    monto: a.monto,
+    fecha: a.fecha,
+    nota: a.nota,
+    ...(enlazado ? { movimientoId: a.movimientoId as number } : {}),
+  }
 }
 
 function validarMovimiento(m: unknown, i: number, categoriasPorId: Map<number, Categoria>): Movimiento {
@@ -92,6 +151,10 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   if (datos.version > VERSION_RESPALDO) falla('Esta copia es de una versión más nueva de la app. Actualiza la app e inténtalo de nuevo.')
   if (typeof datos.exportadoEn !== 'string' || Number.isNaN(Date.parse(datos.exportadoEn))) falla('La copia no tiene una fecha válida.')
   if (!Array.isArray(datos.categorias) || !Array.isArray(datos.movimientos)) falla('A la copia le faltan datos.')
+  // Las copias de la versión 1 son anteriores a los ahorros: no traen metas ni aportes.
+  const metasCrudas = datos.version >= 2 ? datos.metas : []
+  const aportesCrudos = datos.version >= 2 ? datos.aportes : []
+  if (!Array.isArray(metasCrudas) || !Array.isArray(aportesCrudos)) falla('A la copia le faltan datos.')
 
   const categorias = datos.categorias.map(validarCategoria)
   sinRepetidos(categorias.map((c) => c.id!), 'identificadores de categoría')
@@ -99,16 +162,24 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   const movimientos = datos.movimientos.map((m, i) => validarMovimiento(m, i, categoriasPorId))
   sinRepetidos(movimientos.map((m) => m.id!), 'identificadores de movimiento')
 
-  return { app: 'mis-finanzas', version: datos.version, exportadoEn: datos.exportadoEn, categorias, movimientos }
+  const metas = metasCrudas.map(validarMeta)
+  sinRepetidos(metas.map((m) => m.id!), 'identificadores de meta')
+  const aportes = aportesCrudos.map((a, i) =>
+    validarAporte(a, i, new Set(metas.map((m) => m.id!)), new Set(movimientos.map((m) => m.id!))),
+  )
+  sinRepetidos(aportes.map((a) => a.id!), 'identificadores de aporte')
+
+  return { app: 'mis-finanzas', version: datos.version, exportadoEn: datos.exportadoEn, categorias, movimientos, metas, aportes }
 }
 
 /** Reemplaza todo lo que hay en el teléfono por el contenido de la copia (todo o nada). */
 export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
-  await db.transaction('rw', db.categorias, db.movimientos, async () => {
-    await db.categorias.clear()
-    await db.movimientos.clear()
+  await db.transaction('rw', db.categorias, db.movimientos, db.metas, db.aportes, async () => {
+    await Promise.all([db.categorias.clear(), db.movimientos.clear(), db.metas.clear(), db.aportes.clear()])
     await db.categorias.bulkAdd(respaldo.categorias)
     await db.movimientos.bulkAdd(respaldo.movimientos)
+    await db.metas.bulkAdd(respaldo.metas)
+    await db.aportes.bulkAdd(respaldo.aportes)
   })
 }
 

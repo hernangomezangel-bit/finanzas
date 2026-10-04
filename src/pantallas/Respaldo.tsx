@@ -77,7 +77,7 @@ export default function Respaldo() {
       await restaurarRespaldo(pendiente)
       setMensaje({
         tipo: 'ok',
-        texto: `Listo: se restauraron ${pendiente.movimientos.length} movimientos y ${pendiente.categorias.length} categorías.`,
+        texto: `Listo: se restauraron ${pendiente.movimientos.length} movimientos, ${pendiente.categorias.length} categorías y ${pendiente.metas.length} metas.`,
       })
     } catch {
       setMensaje({ tipo: 'error', texto: 'No se pudo restaurar la copia. Tus datos actuales no se cambiaron.' })
@@ -118,7 +118,13 @@ export default function Respaldo() {
           <p>
             La copia es del <strong>{formatoFecha.format(new Date(pendiente.exportadoEn))}</strong> y tiene{' '}
             <strong>{pendiente.movimientos.length} movimientos</strong> y{' '}
-            <strong>{pendiente.categorias.length} categorías</strong>.
+            <strong>{pendiente.categorias.length} categorías</strong>
+            {pendiente.version >= 2 && (
+              <>
+                {' '}y <strong>{pendiente.metas.length} metas de ahorro</strong>
+              </>
+            )}
+            .
           </p>
           <p className="aviso-fuerte">
             Se reemplazarán TODOS los datos que tienes ahora en este teléfono. Esto no se puede deshacer.
@@ -141,5 +147,5 @@ function textoDias(dias: number): string {
 
 /** Copia vacía solo para preguntarle al navegador si sabe compartir este tipo de archivo. */
 function vacio(): DatosRespaldo {
-  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [] }
+  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [] }
 }

@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento, type Tipo } from '../db'
 import { hoy } from '../fechas'
+import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
-
-const formatoMiles = new Intl.NumberFormat('es-CO')
 
 interface Props {
   /** Si viene, se edita ese movimiento; si no, se crea uno nuevo. */
@@ -59,19 +58,7 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
         </button>
       </div>
 
-      <label className="campo">
-        Monto
-        <div className="monto-caja">
-          <span>$</span>
-          <input
-            inputMode="numeric"
-            autoFocus
-            placeholder="0"
-            value={monto ? formatoMiles.format(monto) : ''}
-            onChange={(e) => setMonto(Number(e.target.value.replace(/\D/g, '').slice(0, 12)))}
-          />
-        </div>
-      </label>
+      <CampoMonto valor={monto} alCambiar={setMonto} autoFocus />
 
       <div className="campo">
         Categoría

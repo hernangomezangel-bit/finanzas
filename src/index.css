@@ -221,3 +221,43 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
   background: #78350f; color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .aviso-copia button.tenue { background: none; color: #78350f; }
+
+/* ---------- Ahorros ---------- */
+.etiqueta-grande { display: block; font-size: 0.85rem; color: var(--suave); }
+.total-grande { display: block; font-size: 1.9rem; margin: 2px 0; }
+.lista-metas { list-style: none; margin: 0; padding: 0; }
+.meta-tarjeta {
+  width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.meta-titulo { display: flex; align-items: center; gap: 12px; }
+.meta-titulo h2 { margin: 0; }
+.icono-meta { font-size: 2rem; }
+.etiqueta { display: block; font-size: 0.8rem; color: var(--suave); }
+
+.barra-progreso { height: 12px; border-radius: 6px; background: var(--borde); overflow: hidden; }
+.barra-progreso div { height: 100%; background: var(--verde); border-radius: 6px; }
+.progreso-texto { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 0.88rem; }
+
+.faltante { margin: 12px 0; font-size: 0.95rem; line-height: 1.4; }
+.volver {
+  min-height: 44px; border: 0; background: none; color: var(--verde);
+  font: inherit; font-weight: 600; cursor: pointer; padding: 0 4px; margin-bottom: 6px;
+}
+.subtitulo { font-size: 0.85rem; color: var(--suave); margin: 18px 4px 8px; font-weight: 600; }
+.acciones-meta { margin-top: 18px; }
+.cerradas { margin-top: 8px; }
+.cerradas summary { min-height: 44px; display: flex; align-items: center; color: var(--suave); cursor: pointer; }
+
+.grafica { display: block; width: 100%; height: auto; margin-top: 12px; }
+.grafica .eje { stroke: var(--borde); stroke-width: 1; }
+.grafica .linea { fill: none; stroke: var(--verde); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.grafica .area { fill: var(--verde); opacity: 0.15; }
+.grafica .punto { fill: var(--verde); stroke: var(--tarjeta); stroke-width: 1.5; }
+.grafica .linea-meta { stroke: var(--suave); stroke-width: 1; stroke-dasharray: 4 4; }
+.grafica .texto-grafica { font-size: 9px; fill: var(--suave); }
+
+.casilla { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; cursor: pointer; }
+.casilla input { width: 24px; height: 24px; margin-top: 2px; flex: none; accent-color: var(--verde); }
+.casilla span { display: flex; flex-direction: column; gap: 2px; }
+.casilla small { color: var(--suave); }
