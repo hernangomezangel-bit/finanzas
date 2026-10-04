@@ -1,4 +1,5 @@
 import { metaDelMes } from '../diario'
+import { hoy } from '../fechas'
 import { pesos } from '../formato'
 import { useResumenesJornadas } from '../fuentes'
 import BarraProgreso from './BarraProgreso'
@@ -14,6 +15,8 @@ export default function ResumenJornadas({ mes }: { mes: string }) {
         .filter(({ resumen }) => resumen.trabajados > 0 || resumen.descansos > 0)
         .map(({ fuente, resumen }) => {
           const metaMes = metaDelMes(mes, fuente.metaDiaria, fuente.diasLibres)
+          // Lo que aún se puede ganar: solo los días que quedan del mes (hoy ya cuenta como pasado).
+          const restante = metaDelMes(mes, fuente.metaDiaria, fuente.diasLibres, hoy())
           return (
           <section key={fuente.id} className="tarjeta">
             <h2>{fuente.nombre} este mes</h2>
@@ -21,10 +24,14 @@ export default function ResumenJornadas({ mes }: { mes: string }) {
               <span>Ganado ({resumen.trabajados} {resumen.trabajados === 1 ? 'día trabajado' : 'días trabajados'})</span>
               <strong className="ingreso">{pesos(resumen.ganado)}</strong>
             </p>
-            <p className="fila-dato">
-              <span>Si cumples tu meta todos los días ({metaMes.dias} días)</span>
-              <strong>{pesos(metaMes.total)}</strong>
-            </p>
+            {restante.dias > 0 && (
+              <p className="fila-dato">
+                <span>
+                  Si cumples tu meta {restante.dias === 1 ? 'el día que queda' : `los ${restante.dias} días que quedan`}
+                </span>
+                <strong>{pesos(restante.total)}</strong>
+              </p>
+            )}
             <div className="meta-mes">
               <BarraProgreso ahorrado={Math.min(resumen.ganado, metaMes.total)} objetivo={metaMes.total} etiqueta="de la meta del mes" />
             </div>

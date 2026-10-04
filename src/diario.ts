@@ -63,14 +63,23 @@ export function pendientesDiarios(programas: ProgramaDiario[], resueltas: Set<st
 }
 
 /**
- * Lo que se ganaría en el mes completo cumpliendo la meta cada día que se puede trabajar
- * (todos los días menos los de la semana en que nunca se trabaja).
+ * Lo que se ganaría cumpliendo la meta cada día que se puede trabajar (todos los días menos los de
+ * la semana en que nunca se trabaja). Sin `hoy` cuenta el mes completo. Con `hoy` cuenta solo los
+ * días que quedan: hoy ya cuenta como pasado, así que se cuenta desde mañana. Si el mes ya terminó
+ * no queda ninguno, y si todavía no empieza se cuenta completo.
  */
-export function metaDelMes(mes: string, metaDiaria: number, diasLibres: number[]): { dias: number; total: number } {
+export function metaDelMes(
+  mes: string,
+  metaDiaria: number,
+  diasLibres: number[],
+  hoy?: string,
+): { dias: number; total: number } {
   const [anio, m] = mes.split('-').map(Number)
   const diasEnMes = new Date(anio, m, 0).getDate()
+  const mesDeHoy = hoy?.slice(0, 7)
+  const primerDia = hoy === undefined || mesDeHoy! < mes ? 1 : mesDeHoy === mes ? Number(hoy.slice(8, 10)) + 1 : diasEnMes + 1
   let dias = 0
-  for (let d = 1; d <= diasEnMes; d++) {
+  for (let d = primerDia; d <= diasEnMes; d++) {
     if (!diasLibres.includes(new Date(anio, m - 1, d).getDay())) dias++
   }
   return { dias, total: dias * metaDiaria }
