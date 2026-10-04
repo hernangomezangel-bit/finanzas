@@ -1,5 +1,7 @@
+import { metaDelMes } from '../diario'
 import { pesos } from '../formato'
 import { useResumenesJornadas } from '../fuentes'
+import BarraProgreso from './BarraProgreso'
 
 /** Cómo va el mes en cada trabajo con meta diaria: ganado, promedio frente a la meta y la semana. */
 export default function ResumenJornadas({ mes }: { mes: string }) {
@@ -10,12 +12,26 @@ export default function ResumenJornadas({ mes }: { mes: string }) {
     <>
       {resumenes
         .filter(({ resumen }) => resumen.trabajados > 0 || resumen.descansos > 0)
-        .map(({ fuente, resumen }) => (
+        .map(({ fuente, resumen }) => {
+          const metaMes = metaDelMes(mes, fuente.metaDiaria, fuente.diasLibres)
+          return (
           <section key={fuente.id} className="tarjeta">
             <h2>{fuente.nombre} este mes</h2>
             <p className="fila-dato">
               <span>Ganado ({resumen.trabajados} {resumen.trabajados === 1 ? 'día trabajado' : 'días trabajados'})</span>
               <strong className="ingreso">{pesos(resumen.ganado)}</strong>
+            </p>
+            <p className="fila-dato">
+              <span>Si cumples tu meta todos los días ({metaMes.dias} días)</span>
+              <strong>{pesos(metaMes.total)}</strong>
+            </p>
+            <div className="meta-mes">
+              <BarraProgreso ahorrado={Math.min(resumen.ganado, metaMes.total)} objetivo={metaMes.total} etiqueta="de la meta del mes" />
+            </div>
+            <p className={resumen.ganado >= metaMes.total ? 'frente-meta arriba' : 'frente-meta falta'}>
+              {resumen.ganado >= metaMes.total
+                ? '¡Meta del mes cumplida! 🎉'
+                : `Te faltan ${pesos(metaMes.total - resumen.ganado)} para tu meta del mes`}
             </p>
             {resumen.promedio !== null && (
               <p className="fila-dato">
@@ -43,7 +59,8 @@ export default function ResumenJornadas({ mes }: { mes: string }) {
               <strong>{resumen.descansos}</strong>
             </p>
           </section>
-        ))}
+          )
+        })}
     </>
   )
 }

@@ -345,3 +345,7 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
   min-height: 44px; padding: 0 14px; border: 0; border-radius: 8px; background: none;
   color: #5eead4; font: inherit; font-weight: 700; cursor: pointer;
 }
+
+.frente-meta.falta { color: var(--suave); font-weight: 500; }
+.meta-mes { margin: 6px 0 10px; }
+.frente-meta.falta, .frente-meta.arriba { margin-bottom: 14px; }

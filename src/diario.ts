@@ -62,6 +62,20 @@ export function pendientesDiarios(programas: ProgramaDiario[], resueltas: Set<st
   return lista.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.fuenteId - b.fuenteId)
 }
 
+/**
+ * Lo que se ganaría en el mes completo cumpliendo la meta cada día que se puede trabajar
+ * (todos los días menos los de la semana en que nunca se trabaja).
+ */
+export function metaDelMes(mes: string, metaDiaria: number, diasLibres: number[]): { dias: number; total: number } {
+  const [anio, m] = mes.split('-').map(Number)
+  const diasEnMes = new Date(anio, m, 0).getDate()
+  let dias = 0
+  for (let d = 1; d <= diasEnMes; d++) {
+    if (!diasLibres.includes(new Date(anio, m - 1, d).getDay())) dias++
+  }
+  return { dias, total: dias * metaDiaria }
+}
+
 export interface JornadaMonto {
   fecha: string
   estado: 'trabajada' | 'descanso'
