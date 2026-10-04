@@ -11,6 +11,8 @@ export interface Categoria {
   oculta?: boolean
   /** Marca las categorías que la app usa por su cuenta (p. ej. 'ahorro'), aunque se renombren. */
   clave?: 'ahorro' | 'deudas'
+  /** Solo ingresos: dinero esporádico que cambia cada mes (comisiones, trabajos por fuera). */
+  variable?: boolean
 }
 
 export interface Movimiento {
@@ -22,6 +24,32 @@ export interface Movimiento {
   /** Fecha local en formato AAAA-MM-DD. */
   fecha: string
   nota: string
+}
+
+/** Movimiento que se repite cada mes (salario, arriendo, servicios). La app lo propone; la persona confirma. */
+export interface Recurrente {
+  id?: number
+  nombre: string
+  tipo: Tipo
+  /** Último monto acordado; se propone tal cual y se puede cambiar al confirmar. */
+  monto: number
+  categoriaId: number
+  nota: string
+  /** Días del mes en que cae (uno = mensual, dos = quincenal). */
+  dias: number[]
+  /** Desde cuándo cuenta; no se proponen fechas anteriores. */
+  creado: string
+  activo: boolean
+}
+
+/** Qué pasó con un vencimiento concreto de un recurrente. */
+export interface Ocurrencia {
+  id?: number
+  recurrenteId: number
+  /** Fecha del vencimiento (AAAA-MM-DD). */
+  fecha: string
+  estado: 'registrada' | 'omitida'
+  movimientoId?: number
 }
 
 export type TipoMeta = 'inversion' | 'gasto'
@@ -99,6 +127,13 @@ export const CATEGORIA_DEUDAS: Categoria = {
   clave: 'deudas',
 }
 
+export const CATEGORIA_COMISIONES: Categoria = {
+  nombre: 'Comisiones',
+  tipo: 'ingreso',
+  icono: '💸',
+  variable: true,
+}
+
 class BaseFinanzas extends Dexie {
   categorias!: Table<Categoria, number>
   movimientos!: Table<Movimiento, number>
@@ -107,6 +142,8 @@ class BaseFinanzas extends Dexie {
   deudas!: Table<Deuda, number>
   pagosDeuda!: Table<PagoDeuda, number>
   ajustes!: Table<Ajuste, string>
+  recurrentes!: Table<Recurrente, number>
+  ocurrencias!: Table<Ocurrencia, number>
 
   constructor() {
     super('finanzas')
@@ -138,6 +175,18 @@ class BaseFinanzas extends Dexie {
           await categorias.add(CATEGORIA_DEUDAS)
         }
       })
+    this.version(4)
+      .stores({
+        recurrentes: '++id',
+        ocurrencias: '++id, recurrenteId',
+      })
+      .upgrade(async (tx) => {
+        const categorias = tx.table<Categoria>('categorias')
+        await categorias.filter((c) => c.tipo === 'ingreso' && c.nombre === 'Ingresos extra').modify({ variable: true })
+        if ((await categorias.filter((c) => c.nombre === CATEGORIA_COMISIONES.nombre).count()) === 0) {
+          await categorias.add(CATEGORIA_COMISIONES)
+        }
+      })
     this.on('populate', (tx) => {
       tx.table('categorias').bulkAdd(CATEGORIAS_INICIALES)
     })
@@ -158,7 +207,8 @@ const CATEGORIAS_INICIALES: Categoria[] = [
   CATEGORIA_DEUDAS,
   { nombre: 'Otros gastos', tipo: 'gasto', icono: '🧾' },
   { nombre: 'Salario', tipo: 'ingreso', icono: '💼' },
-  { nombre: 'Ingresos extra', tipo: 'ingreso', icono: '💵' },
+  { nombre: 'Ingresos extra', tipo: 'ingreso', icono: '💵', variable: true },
+  CATEGORIA_COMISIONES,
   { nombre: 'Otros ingresos', tipo: 'ingreso', icono: '🪙' },
 ]
 

@@ -77,7 +77,7 @@ export default function Respaldo() {
       await restaurarRespaldo(pendiente)
       setMensaje({
         tipo: 'ok',
-        texto: `Listo: se restauraron ${pendiente.movimientos.length} movimientos, ${pendiente.categorias.length} categorías, ${pendiente.metas.length} metas y ${pendiente.deudas.length} deudas.`,
+        texto: `Listo: se restauraron ${plural(pendiente.movimientos.length, 'movimiento', 'movimientos')}, ${plural(pendiente.categorias.length, 'categoría', 'categorías')}, ${plural(pendiente.metas.length, 'meta', 'metas')} y ${plural(pendiente.deudas.length, 'deuda', 'deudas')}.`,
       })
     } catch {
       setMensaje({ tipo: 'error', texto: 'No se pudo restaurar la copia. Tus datos actuales no se cambiaron.' })
@@ -117,17 +117,17 @@ export default function Respaldo() {
         <Hoja titulo="¿Restaurar esta copia?" alCerrar={() => setPendiente(null)}>
           <p>
             La copia es del <strong>{formatoFecha.format(new Date(pendiente.exportadoEn))}</strong> y tiene{' '}
-            <strong>{pendiente.movimientos.length} movimientos</strong> y{' '}
-            <strong>{pendiente.categorias.length} categorías</strong>
+            <strong>{plural(pendiente.movimientos.length, 'movimiento', 'movimientos')}</strong> y{' '}
+            <strong>{plural(pendiente.categorias.length, 'categoría', 'categorías')}</strong>
             {pendiente.version >= 2 && (
               <>
                 {pendiente.version >= 3 ? ', ' : ' y '}
-                <strong>{pendiente.metas.length} metas de ahorro</strong>
+                <strong>{plural(pendiente.metas.length, 'meta de ahorro', 'metas de ahorro')}</strong>
               </>
             )}
             {pendiente.version >= 3 && (
               <>
-                {' '}y <strong>{pendiente.deudas.length} deudas</strong>
+                {' '}y <strong>{plural(pendiente.deudas.length, 'deuda', 'deudas')}</strong>
               </>
             )}
             .
@@ -146,6 +146,10 @@ export default function Respaldo() {
   )
 }
 
+function plural(cantidad: number, uno: string, varios: string): string {
+  return `${cantidad} ${cantidad === 1 ? uno : varios}`
+}
+
 function textoDias(dias: number): string {
   if (dias <= 0) return 'hoy'
   return dias === 1 ? 'hace 1 día' : `hace ${dias} días`
@@ -153,5 +157,5 @@ function textoDias(dias: number): string {
 
 /** Copia vacía solo para preguntarle al navegador si sabe compartir este tipo de archivo. */
 function vacio(): DatosRespaldo {
-  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [], deudas: [], pagosDeuda: [], ajustes: [] }
+  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [], deudas: [], pagosDeuda: [], ajustes: [], recurrentes: [], ocurrencias: [] }
 }

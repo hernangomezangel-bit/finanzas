@@ -3,11 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
 import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import { usePromedioVariable } from '../ingresos'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
+import PendientesRecurrentes from '../componentes/PendientesRecurrentes'
 import Dona, { type Tajada } from '../componentes/Dona'
 import FormMovimiento from './FormMovimiento'
 
-const COLORES = ['#0f766e', '#d97706', '#2563eb', '#be185d', '#7c3aed', '#65a30d', '#dc2626', '#0891b2', '#a16207', '#64748b']
+const COLORES = ['var(--acento)','#d97706', '#2563eb', '#be185d', '#7c3aed', '#65a30d', '#dc2626', '#0891b2', '#a16207', '#64748b']
 
 type Formulario = { movimiento?: Movimiento } | null
 
@@ -20,10 +22,15 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
     [mes],
   )
   const categorias = useLiveQuery(() => db.categorias.toArray())
+  const promedio = usePromedioVariable(mes)
 
   if (!movimientos || !categorias) return null
 
   const porId = new Map(categorias.map((c) => [c.id!, c]))
+  const variableMes = movimientos.reduce(
+    (s, m) => (m.tipo === 'ingreso' && porId.get(m.categoriaId)?.variable ? s + m.monto : s),
+    0,
+  )
   const ingresos = suma(movimientos, 'ingreso')
   const gastos = suma(movimientos, 'gasto')
 
@@ -47,6 +54,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   return (
     <>
       <AvisoRespaldo alIr={irARespaldo} />
+      <PendientesRecurrentes />
 
       <div className="selector-mes">
         <button onClick={() => setMes(moverMes(mes, -1))} aria-label="Mes anterior">‹</button>
@@ -68,6 +76,23 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
           <strong className={balance < 0 ? 'gasto' : 'ingreso'}>{pesos(balance)}</strong>
         </div>
       </div>
+
+      {(variableMes > 0 || promedio) && (
+        <section className="tarjeta">
+          <h2>Ingresos variables</h2>
+          <p className="fila-dato">
+            <span>Este mes</span>
+            <strong className="ingreso">{pesos(variableMes)}</strong>
+          </p>
+          {promedio && (
+            <p className="fila-dato">
+              <span>Promedio mensual ({promedio.meses} {promedio.meses === 1 ? 'mes' : 'meses'})</span>
+              <strong>{pesos(promedio.promedio)}</strong>
+            </p>
+          )}
+          <p className="ayuda">Comisiones y trabajos por fuera. Úsalo como guía: no es un ingreso seguro.</p>
+        </section>
+      )}
 
       {tajadas.length > 0 && (
         <section className="tarjeta">

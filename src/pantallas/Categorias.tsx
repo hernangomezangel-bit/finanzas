@@ -22,7 +22,10 @@ export default function Categorias() {
               .map((c) => (
                 <li key={c.id} className={c.oculta ? 'oculta' : ''}>
                   <span aria-hidden="true">{c.icono}</span>
-                  <span className="nombre">{c.nombre}</span>
+                  <span className="nombre">
+                    {c.nombre}
+                    {c.variable && <small className="ayuda">Ingreso variable</small>}
+                  </span>
                   <button onClick={() => setEdicion({ categoria: c, tipo })}>Editar</button>
                   <button onClick={() => db.categorias.update(c.id!, { oculta: !c.oculta })}>
                     {c.oculta ? 'Mostrar' : 'Ocultar'}
@@ -48,12 +51,14 @@ function FormCategoria({ edicion, alCerrar }: { edicion: NonNullable<Edicion>; a
   const { categoria, tipo } = edicion
   const [nombre, setNombre] = useState(categoria?.nombre ?? '')
   const [icono, setIcono] = useState(categoria?.icono ?? '🏷️')
+  const [variable, setVariable] = useState(categoria?.variable ?? false)
   const [error, setError] = useState('')
 
   async function guardar() {
     const limpio = nombre.trim()
     if (!limpio) return setError('Escribe un nombre.')
-    const datos = { nombre: limpio, icono: icono.trim() || '🏷️' }
+    // undefined borra la marca al editar; en gastos nunca aplica.
+    const datos = { nombre: limpio, icono: icono.trim() || '🏷️', variable: tipo === 'ingreso' && variable ? true : undefined }
     if (categoria) await db.categorias.update(categoria.id!, datos)
     else await db.categorias.add({ ...datos, tipo })
     alCerrar()
@@ -69,6 +74,15 @@ function FormCategoria({ edicion, alCerrar }: { edicion: NonNullable<Edicion>; a
         Ícono (un emoji)
         <input type="text" maxLength={4} value={icono} onChange={(e) => setIcono(e.target.value)} />
       </label>
+      {tipo === 'ingreso' && (
+        <label className="casilla">
+          <input type="checkbox" checked={variable} onChange={(e) => setVariable(e.target.checked)} />
+          <span>
+            Ingreso variable
+            <small>Marca esto si no llega fijo cada mes: comisiones, trabajos por fuera. Verás su promedio en Presupuesto.</small>
+          </span>
+        </label>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
       <button className="boton primario" onClick={guardar}>Guardar</button>
     </Hoja>

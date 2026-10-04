@@ -6,7 +6,9 @@ import {
   type Deuda,
   type Meta,
   type Movimiento,
+  type Ocurrencia,
   type PagoDeuda,
+  type Recurrente,
   type Tipo,
   type TipoMeta,
 } from './db'
@@ -17,8 +19,9 @@ import type { TipoTasa } from './plan'
  * Súbelo cuando cambie la forma de la copia; así una app vieja no malinterpreta una copia nueva.
  * Versión 1: categorías y movimientos. Versión 2: agrega metas y aportes de ahorro.
  * Versión 3: agrega deudas, pagos de deudas y las preferencias del plan.
+ * Versión 4: agrega movimientos recurrentes y sus vencimientos, y marca los ingresos variables.
  */
-export const VERSION_RESPALDO = 3
+export const VERSION_RESPALDO = 4
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -32,13 +35,15 @@ export interface Respaldo {
   deudas: Deuda[]
   pagosDeuda: PagoDeuda[]
   ajustes: Ajuste[]
+  recurrentes: Recurrente[]
+  ocurrencias: Ocurrencia[]
 }
 
 export async function crearRespaldo(): Promise<Respaldo> {
   // Una sola lectura para que todas las tablas queden coherentes entre sí.
   return db.transaction(
     'r',
-    [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes],
+    [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes, db.recurrentes, db.ocurrencias],
     async () => ({
       app: 'mis-finanzas' as const,
       version: VERSION_RESPALDO,
@@ -50,6 +55,8 @@ export async function crearRespaldo(): Promise<Respaldo> {
       deudas: await db.deudas.toArray(),
       pagosDeuda: await db.pagosDeuda.toArray(),
       ajustes: await db.ajustes.toArray(),
+      recurrentes: await db.recurrentes.toArray(),
+      ocurrencias: await db.ocurrencias.toArray(),
     }),
   )
 }
@@ -89,6 +96,7 @@ function validarCategoria(c: unknown, i: number): Categoria {
   if (typeof c.icono !== 'string' || c.icono.length > 8) return falla(`La categoría "${c.nombre}" tiene un ícono no válido.`)
   if (c.oculta !== undefined && typeof c.oculta !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
   if (c.clave !== undefined && c.clave !== 'ahorro' && c.clave !== 'deudas') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
+  if (c.variable !== undefined && typeof c.variable !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
   return {
     id: c.id,
     nombre: c.nombre,
@@ -96,6 +104,50 @@ function validarCategoria(c: unknown, i: number): Categoria {
     icono: c.icono,
     ...(c.oculta ? { oculta: true } : {}),
     ...(c.clave ? { clave: c.clave } : {}),
+    ...(c.variable ? { variable: true } : {}),
+  }
+}
+
+function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, Categoria>): Recurrente {
+  if (!esObjeto(r)) return falla(`El recurrente ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(r.id) || r.id <= 0) return falla(`El recurrente ${i + 1} no tiene un identificador válido.`)
+  if (typeof r.nombre !== 'string' || !r.nombre.trim() || r.nombre.length > 40) return falla(`El recurrente ${i + 1} tiene un nombre no válido.`)
+  if (!esTipo(r.tipo)) return falla(`El recurrente "${r.nombre}" tiene un tipo no válido.`)
+  if (!esEntero(r.monto) || r.monto <= 0) return falla(`El recurrente "${r.nombre}" tiene un monto no válido.`)
+  if (!esEntero(r.categoriaId) || !categoriasPorId.has(r.categoriaId)) return falla(`El recurrente "${r.nombre}" usa una categoría que no existe en la copia.`)
+  if (typeof r.nota !== 'string' || r.nota.length > 200) return falla(`El recurrente "${r.nombre}" tiene una nota no válida.`)
+  if (!Array.isArray(r.dias) || r.dias.length < 1 || r.dias.length > 4 || !r.dias.every((d) => esEntero(d) && d >= 1 && d <= 31)) {
+    return falla(`El recurrente "${r.nombre}" tiene días no válidos.`)
+  }
+  if (!esFechaValida(r.creado)) return falla(`El recurrente "${r.nombre}" tiene una fecha de inicio no válida.`)
+  if (typeof r.activo !== 'boolean') return falla(`El recurrente "${r.nombre}" tiene un dato no válido.`)
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    tipo: r.tipo,
+    monto: r.monto,
+    categoriaId: r.categoriaId,
+    nota: r.nota,
+    dias: [...new Set(r.dias as number[])].sort((a, b) => a - b),
+    creado: r.creado,
+    activo: r.activo,
+  }
+}
+
+function validarOcurrencia(o: unknown, i: number, recurrentesPorId: Set<number>, movimientosPorId: Set<number>): Ocurrencia {
+  if (!esObjeto(o)) return falla(`El vencimiento ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(o.id) || o.id <= 0) return falla(`El vencimiento ${i + 1} no tiene un identificador válido.`)
+  if (!esEntero(o.recurrenteId) || !recurrentesPorId.has(o.recurrenteId)) return falla(`El vencimiento ${i + 1} usa un recurrente que no existe en la copia.`)
+  if (!esFechaValida(o.fecha)) return falla(`El vencimiento ${i + 1} tiene una fecha no válida.`)
+  if (o.estado !== 'registrada' && o.estado !== 'omitida') return falla(`El vencimiento ${i + 1} tiene un estado no válido.`)
+  if (o.movimientoId !== undefined && !esEntero(o.movimientoId)) return falla(`El vencimiento ${i + 1} tiene un dato no válido.`)
+  const enlazado = o.movimientoId !== undefined && movimientosPorId.has(o.movimientoId)
+  return {
+    id: o.id,
+    recurrenteId: o.recurrenteId,
+    fecha: o.fecha,
+    estado: o.estado,
+    ...(enlazado ? { movimientoId: o.movimientoId as number } : {}),
   }
 }
 
@@ -237,9 +289,13 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   const deudasCrudas = datos.version >= 3 ? datos.deudas : []
   const pagosCrudos = datos.version >= 3 ? datos.pagosDeuda : []
   const ajustesCrudos = datos.version >= 3 ? datos.ajustes : []
+  // Las de la versión 3 son anteriores a los recurrentes.
+  const recurrentesCrudos = datos.version >= 4 ? datos.recurrentes : []
+  const ocurrenciasCrudas = datos.version >= 4 ? datos.ocurrencias : []
   if (
     !Array.isArray(metasCrudas) || !Array.isArray(aportesCrudos) ||
-    !Array.isArray(deudasCrudas) || !Array.isArray(pagosCrudos) || !Array.isArray(ajustesCrudos)
+    !Array.isArray(deudasCrudas) || !Array.isArray(pagosCrudos) || !Array.isArray(ajustesCrudos) ||
+    !Array.isArray(recurrentesCrudos) || !Array.isArray(ocurrenciasCrudas)
   ) {
     falla('A la copia le faltan datos.')
   }
@@ -266,6 +322,13 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   const ajustes = ajustesCrudos.map(validarAjuste)
   if (new Set(ajustes.map((a) => a.clave)).size !== ajustes.length) falla('La copia tiene preferencias repetidas.')
 
+  const recurrentes = recurrentesCrudos.map((r, i) => validarRecurrente(r, i, categoriasPorId))
+  sinRepetidos(recurrentes.map((r) => r.id!), 'identificadores de recurrente')
+  const ocurrencias = ocurrenciasCrudas.map((o, i) =>
+    validarOcurrencia(o, i, new Set(recurrentes.map((r) => r.id!)), new Set(movimientos.map((m) => m.id!))),
+  )
+  sinRepetidos(ocurrencias.map((o) => o.id!), 'identificadores de vencimiento')
+
   return {
     app: 'mis-finanzas',
     version: datos.version,
@@ -277,12 +340,16 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
     deudas,
     pagosDeuda,
     ajustes,
+    recurrentes,
+    ocurrencias,
   }
 }
 
 /** Reemplaza todo lo que hay en el teléfono por el contenido de la copia (todo o nada). */
 export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
-  const tablas = [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes]
+  const tablas = [
+    db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes, db.recurrentes, db.ocurrencias,
+  ]
   await db.transaction('rw', tablas, async () => {
     await Promise.all(tablas.map((t) => t.clear()))
     await db.categorias.bulkAdd(respaldo.categorias)
@@ -292,6 +359,8 @@ export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
     await db.deudas.bulkAdd(respaldo.deudas)
     await db.pagosDeuda.bulkAdd(respaldo.pagosDeuda)
     await db.ajustes.bulkAdd(respaldo.ajustes)
+    await db.recurrentes.bulkAdd(respaldo.recurrentes)
+    await db.ocurrencias.bulkAdd(respaldo.ocurrencias)
   })
 }
 

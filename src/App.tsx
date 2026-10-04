@@ -3,6 +3,7 @@ import Presupuesto from './pantallas/Presupuesto'
 import Ahorros from './pantallas/Ahorros'
 import Categorias from './pantallas/Categorias'
 import Deudas from './pantallas/Deudas'
+import Recurrentes from './pantallas/Recurrentes'
 import Respaldo from './pantallas/Respaldo'
 
 type Pestana = 'presupuesto' | 'ahorros' | 'deudas' | 'mas'
@@ -31,6 +32,7 @@ export default function App() {
         {activa === 'mas' && (
           <>
             <Respaldo />
+            <Recurrentes />
             <Categorias />
           </>
         )}

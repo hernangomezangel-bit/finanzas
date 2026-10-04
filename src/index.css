@@ -1,5 +1,6 @@
-:root {
+﻿:root {
   --verde: #0f766e;
+  --acento: #0f766e;
   --fondo: #f5f7f6;
   --tarjeta: #ffffff;
   --texto: #1c2321;
@@ -12,6 +13,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --acento: #2dd4bf;
     --fondo: #101614;
     --tarjeta: #1a2220;
     --texto: #e8efec;
@@ -77,7 +79,7 @@ body { margin: 0; background: var(--fondo); }
   gap: 2px;
   cursor: pointer;
 }
-.barra button.activa { color: var(--verde); font-weight: 700; }
+.barra button.activa { color: var(--acento); font-weight: 700; }
 .barra .icono { font-size: 1.5rem; }
 
 /* ---------- Presupuesto ---------- */
@@ -179,18 +181,18 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
   font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 6px;
 }
 .boton.primario { background: var(--verde); color: #fff; }
-.boton.secundario { background: none; border: 1px solid var(--verde); color: var(--verde); margin-top: 10px; }
+.boton.secundario { background: none; border: 1px solid var(--acento); color: var(--acento); margin-top: 10px; }
 .boton.peligro { background: none; color: #b91c1c; }
 .error { color: #b91c1c; margin: 0 0 8px; font-size: 0.9rem; }
 
-/* ---------- Categorías ---------- */
+/* ---------- CategorÃ­as ---------- */
 .lista-cat { list-style: none; margin: 0; padding: 0; }
 .lista-cat li { display: flex; align-items: center; gap: 10px; min-height: 52px; border-bottom: 1px solid var(--borde); }
 .lista-cat li.oculta { opacity: 0.5; }
 .lista-cat .nombre { flex: 1; }
 .lista-cat button {
   min-height: 40px; padding: 0 10px; border: 0; background: none;
-  color: var(--verde); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  color: var(--acento); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
 }
 .nota-pie { color: var(--suave); text-align: center; }
 
@@ -236,12 +238,12 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .etiqueta { display: block; font-size: 0.8rem; color: var(--suave); }
 
 .barra-progreso { height: 12px; border-radius: 6px; background: var(--borde); overflow: hidden; }
-.barra-progreso div { height: 100%; background: var(--verde); border-radius: 6px; }
+.barra-progreso div { height: 100%; background: var(--acento); border-radius: 6px; }
 .progreso-texto { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 0.88rem; }
 
 .faltante { margin: 12px 0; font-size: 0.95rem; line-height: 1.4; }
 .volver {
-  min-height: 44px; border: 0; background: none; color: var(--verde);
+  min-height: 44px; border: 0; background: none; color: var(--acento);
   font: inherit; font-weight: 600; cursor: pointer; padding: 0 4px; margin-bottom: 6px;
 }
 .subtitulo { font-size: 0.85rem; color: var(--suave); margin: 18px 4px 8px; font-weight: 600; }
@@ -251,14 +253,14 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 
 .grafica { display: block; width: 100%; height: auto; margin-top: 12px; }
 .grafica .eje { stroke: var(--borde); stroke-width: 1; }
-.grafica .linea { fill: none; stroke: var(--verde); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-.grafica .area { fill: var(--verde); opacity: 0.15; }
-.grafica .punto { fill: var(--verde); stroke: var(--tarjeta); stroke-width: 1.5; }
+.grafica .linea { fill: none; stroke: var(--acento); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.grafica .area { fill: var(--acento); opacity: 0.15; }
+.grafica .punto { fill: var(--acento); stroke: var(--tarjeta); stroke-width: 1.5; }
 .grafica .linea-meta { stroke: var(--suave); stroke-width: 1; stroke-dasharray: 4 4; }
 .grafica .texto-grafica { font-size: 9px; fill: var(--suave); }
 
 .casilla { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; cursor: pointer; }
-.casilla input { width: 24px; height: 24px; margin-top: 2px; flex: none; accent-color: var(--verde); }
+.casilla input { width: 24px; height: 24px; margin-top: 2px; flex: none; accent-color: var(--acento); }
 .casilla span { display: flex; flex-direction: column; gap: 2px; }
 .casilla small { color: var(--suave); }
 
@@ -275,7 +277,7 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 
 .metodos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .metodo { border: 1px solid var(--borde); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-.metodo.recomendado-borde { border-color: var(--verde); border-width: 2px; }
+.metodo.recomendado-borde { border-color: var(--acento); border-width: 2px; }
 .metodo h3 { margin: 0; font-size: 0.98rem; }
 .metodo dl { margin: 4px 0 0; display: grid; gap: 2px; }
 .metodo dt { font-size: 0.75rem; color: var(--suave); margin-top: 6px; }
@@ -291,8 +293,8 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .fila-pago { display: flex; align-items: center; gap: 10px; padding: 10px 16px; min-height: 64px; flex-wrap: wrap; }
 .fila-pago .texto-mov { flex: 1 1 140px; }
 .boton-chico {
-  min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--verde);
-  background: none; color: var(--verde); font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--acento);
+  background: none; color: var(--acento); font: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer;
 }
 
 .detalle-plan summary, .tarjeta > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
@@ -301,3 +303,20 @@ h2 { font-size: 1rem; margin: 0 0 12px; }
 .mes-cabecera span { color: var(--suave); }
 .mes-plan ul { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.85rem; }
 .mes-plan li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+
+/* ---------- Recurrentes e ingresos variables ---------- */
+.pendientes { border: 2px solid var(--acento); }
+.lista-pendientes { list-style: none; margin: 0; padding: 0; }
+.lista-pendientes li { border-top: 1px solid var(--borde); padding: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+.lista-pendientes li:first-child { border-top: 0; padding-top: 0; }
+.lista-pendientes .texto-mov small { white-space: normal; overflow: visible; }
+.monto-fila { white-space: nowrap; }
+.boton-chico.ancho { width: 100%; }
+.fila-toca {
+  flex: 1; min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 10px;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0;
+}
+.fila-dato { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 6px; font-size: 0.95rem; }
+.fila-dato span { color: var(--suave); }
+.lista-cat .nombre small { display: block; margin: 0; }
+.dos-dias { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

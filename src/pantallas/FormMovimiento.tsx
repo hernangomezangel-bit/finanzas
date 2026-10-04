@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento, type Tipo } from '../db'
 import { hoy } from '../fechas'
+import { crearMovimientoRecurrente } from '../recurrentes'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
 
@@ -19,6 +20,7 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
   const [categoriaId, setCategoriaId] = useState<number | null>(movimiento?.categoriaId ?? null)
   const [fecha, setFecha] = useState(movimiento?.fecha ?? fechaInicial(mesActual))
   const [nota, setNota] = useState(movimiento?.nota ?? '')
+  const [repetir, setRepetir] = useState(false)
   const [error, setError] = useState('')
 
   const categorias = useLiveQuery(() => db.categorias.where('tipo').equals(tipo).toArray(), [tipo])
@@ -37,6 +39,7 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
     if (!fecha) return setError('Elige una fecha.')
     const datos = { tipo, monto, categoriaId, fecha, nota: nota.trim() }
     if (editando) await db.movimientos.update(movimiento.id!, datos)
+    else if (repetir) await crearMovimientoRecurrente(datos)
     else await db.movimientos.add(datos)
     alCerrar()
   }
@@ -84,6 +87,18 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
         Nota (opcional)
         <input type="text" maxLength={80} value={nota} onChange={(e) => setNota(e.target.value)} />
       </label>
+
+      {!editando && (
+        <label className="casilla">
+          <input type="checkbox" checked={repetir} onChange={(e) => setRepetir(e.target.checked)} />
+          <span>
+            Repetir cada mes
+            <small>
+              Te lo propondré el día {Number(fecha.slice(8, 10)) || '…'} de cada mes, para confirmarlo con un toque.
+            </small>
+          </span>
+        </label>
+      )}
 
       {error && <p className="error" role="alert">{error}</p>}
 

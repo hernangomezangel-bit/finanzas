@@ -4,13 +4,14 @@ import { db, type Ajuste, type Deuda, type PagoDeuda } from '../db'
 import { aDeudaPlan, fechaCuota, guardarAjuste } from '../deudas'
 import { fechaCorta, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { pesos } from '../formato'
+import { usePromedioVariable } from '../ingresos'
 import { simular, type Estrategia, type ResultadoPlan } from '../plan'
 import CampoMonto from '../componentes/CampoMonto'
 import GraficaSaldo from '../componentes/GraficaSaldo'
 import FormPago from './FormPago'
 
 const NOMBRES: Record<Estrategia, string> = { bola: 'Bola de nieve', avalancha: 'Avalancha' }
-const COLORES: Record<Estrategia, string> = { bola: '#d97706', avalancha: '#0f766e' }
+const COLORES: Record<Estrategia, string> = { bola: '#d97706', avalancha: 'var(--acento)' }
 const MESES_MOSTRADOS = 120
 
 interface Props {
@@ -38,6 +39,7 @@ function Contenido({
   const [extra, setExtra] = useState(extraInicial)
   const [elegida, setElegida] = useState<Estrategia | undefined>(estrategiaInicial)
   const [pagando, setPagando] = useState<{ deuda: Deuda; saldo: number; monto: number; fechaCuota?: string } | null>(null)
+  const variables = usePromedioVariable(mesDe(hoy()))
 
   const pagosDe = (id: number) => pagos.filter((p) => p.deudaId === id)
   const activas = useMemo(
@@ -84,6 +86,9 @@ function Contenido({
         <p className="ayuda">
           Además de tus pagos mínimos, que suman {pesos(minimos)}. Todo lo extra, y lo que se libera cuando terminas una
           deuda, se va a la siguiente.
+          {variables && (
+            <> Tus ingresos variables promedian {pesos(variables.promedio)} al mes: podrías destinar una parte.</>
+          )}
         </p>
       </section>
 
