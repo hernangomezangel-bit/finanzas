@@ -22,6 +22,26 @@ function aFecha(texto: string): Date {
   return new Date(a, m - 1, d)
 }
 
+/** Un día después de una fecha AAAA-MM-DD. */
+export function diaSiguiente(fecha: string): string {
+  const [a, m, d] = fecha.split('-').map(Number)
+  const f = new Date(a, m - 1, d + 1)
+  return `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}`
+}
+
+/**
+ * Fecha de la cuota número `numero` (1 = la próxima) de una deuda con día de pago fijo,
+ * contando desde `desde`. Si el mes no tiene ese día (31 en febrero), cae el último día del mes.
+ */
+export function fechaDeCuota(diaPago: number, numero: number, desde = hoy()): string {
+  const [a, m, d] = desde.split('-').map(Number)
+  const total = m - 1 + (d > diaPago ? 1 : 0) + (numero - 1)
+  const anio = a + Math.floor(total / 12)
+  const mes = total % 12
+  const ultimo = new Date(anio, mes + 1, 0).getDate()
+  return `${anio}-${dos(mes + 1)}-${dos(Math.min(diaPago, ultimo))}`
+}
+
 /** Número de día (desde 1970) de una fecha AAAA-MM-DD; sirve para ubicar puntos en una gráfica. */
 export function numeroDeDia(fecha: string): number {
   const [a, m, d] = fecha.split('-').map(Number)

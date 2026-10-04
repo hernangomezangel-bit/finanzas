@@ -1,7 +1,15 @@
 import { pesos } from '../formato'
 
-export default function BarraProgreso({ ahorrado, objetivo }: { ahorrado: number; objetivo: number }) {
-  const pct = Math.min(100, Math.floor((ahorrado / objetivo) * 100))
+export default function BarraProgreso({
+  ahorrado,
+  objetivo,
+  etiqueta = 'de la meta',
+}: {
+  ahorrado: number
+  objetivo: number
+  etiqueta?: string
+}) {
+  const pct = Math.max(0, Math.min(100, Math.floor((ahorrado / objetivo) * 100)))
   return (
     <div>
       <div
@@ -10,7 +18,7 @@ export default function BarraProgreso({ ahorrado, objetivo }: { ahorrado: number
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
-        aria-label={`${pct}% de la meta`}
+        aria-label={`${pct}% ${etiqueta}`}
       >
         <div style={{ width: `${pct}%` }} />
       </div>

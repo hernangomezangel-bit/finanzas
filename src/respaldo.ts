@@ -1,11 +1,24 @@
-import { db, type Aporte, type Categoria, type Meta, type Movimiento, type Tipo, type TipoMeta } from './db'
+import {
+  db,
+  type Ajuste,
+  type Aporte,
+  type Categoria,
+  type Deuda,
+  type Meta,
+  type Movimiento,
+  type PagoDeuda,
+  type Tipo,
+  type TipoMeta,
+} from './db'
 import { hoy } from './fechas'
+import type { TipoTasa } from './plan'
 
 /**
  * Súbelo cuando cambie la forma de la copia; así una app vieja no malinterpreta una copia nueva.
  * Versión 1: categorías y movimientos. Versión 2: agrega metas y aportes de ahorro.
+ * Versión 3: agrega deudas, pagos de deudas y las preferencias del plan.
  */
-export const VERSION_RESPALDO = 2
+export const VERSION_RESPALDO = 3
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -16,19 +29,29 @@ export interface Respaldo {
   movimientos: Movimiento[]
   metas: Meta[]
   aportes: Aporte[]
+  deudas: Deuda[]
+  pagosDeuda: PagoDeuda[]
+  ajustes: Ajuste[]
 }
 
 export async function crearRespaldo(): Promise<Respaldo> {
   // Una sola lectura para que todas las tablas queden coherentes entre sí.
-  return db.transaction('r', db.categorias, db.movimientos, db.metas, db.aportes, async () => ({
-    app: 'mis-finanzas' as const,
-    version: VERSION_RESPALDO,
-    exportadoEn: new Date().toISOString(),
-    categorias: await db.categorias.toArray(),
-    movimientos: await db.movimientos.toArray(),
-    metas: await db.metas.toArray(),
-    aportes: await db.aportes.toArray(),
-  }))
+  return db.transaction(
+    'r',
+    [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes],
+    async () => ({
+      app: 'mis-finanzas' as const,
+      version: VERSION_RESPALDO,
+      exportadoEn: new Date().toISOString(),
+      categorias: await db.categorias.toArray(),
+      movimientos: await db.movimientos.toArray(),
+      metas: await db.metas.toArray(),
+      aportes: await db.aportes.toArray(),
+      deudas: await db.deudas.toArray(),
+      pagosDeuda: await db.pagosDeuda.toArray(),
+      ajustes: await db.ajustes.toArray(),
+    }),
+  )
 }
 
 export function nombreArchivo(): string {
@@ -65,7 +88,7 @@ function validarCategoria(c: unknown, i: number): Categoria {
   if (!esTipo(c.tipo)) return falla(`La categoría "${c.nombre}" tiene un tipo no válido.`)
   if (typeof c.icono !== 'string' || c.icono.length > 8) return falla(`La categoría "${c.nombre}" tiene un ícono no válido.`)
   if (c.oculta !== undefined && typeof c.oculta !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
-  if (c.clave !== undefined && c.clave !== 'ahorro') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
+  if (c.clave !== undefined && c.clave !== 'ahorro' && c.clave !== 'deudas') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
   return {
     id: c.id,
     nombre: c.nombre,
@@ -120,6 +143,62 @@ function validarAporte(a: unknown, i: number, metasPorId: Set<number>, movimient
   }
 }
 
+function validarDeuda(d: unknown, i: number): Deuda {
+  if (!esObjeto(d)) return falla(`La deuda ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(d.id) || d.id <= 0) return falla(`La deuda ${i + 1} no tiene un identificador válido.`)
+  if (typeof d.nombre !== 'string' || !d.nombre.trim() || d.nombre.length > 40) return falla(`La deuda ${i + 1} tiene un nombre no válido.`)
+  if (typeof d.icono !== 'string' || d.icono.length > 8) return falla(`La deuda "${d.nombre}" tiene un ícono no válido.`)
+  if (!esEntero(d.saldoInicial) || d.saldoInicial <= 0) return falla(`La deuda "${d.nombre}" tiene un saldo no válido.`)
+  if (typeof d.tasa !== 'number' || !Number.isFinite(d.tasa) || d.tasa < 0 || d.tasa > 1000) return falla(`La deuda "${d.nombre}" tiene una tasa no válida.`)
+  if (d.tipoTasa !== 'ea' && d.tipoTasa !== 'mensual') return falla(`La deuda "${d.nombre}" tiene un tipo de tasa no válido.`)
+  if (!esEntero(d.pagoMinimo) || d.pagoMinimo <= 0) return falla(`La deuda "${d.nombre}" tiene un pago mínimo no válido.`)
+  if (d.diaPago !== undefined && (!esEntero(d.diaPago) || d.diaPago < 1 || d.diaPago > 31)) return falla(`La deuda "${d.nombre}" tiene un día de pago no válido.`)
+  if (!esFechaValida(d.creada)) return falla(`La deuda "${d.nombre}" tiene una fecha de creación no válida.`)
+  return {
+    id: d.id,
+    nombre: d.nombre,
+    icono: d.icono,
+    saldoInicial: d.saldoInicial,
+    tasa: d.tasa,
+    tipoTasa: d.tipoTasa as TipoTasa,
+    pagoMinimo: d.pagoMinimo,
+    creada: d.creada,
+    ...(d.diaPago !== undefined ? { diaPago: d.diaPago } : {}),
+  }
+}
+
+function validarPagoDeuda(p: unknown, i: number, deudasPorId: Set<number>, movimientosPorId: Set<number>): PagoDeuda {
+  if (!esObjeto(p)) return falla(`El pago de deuda ${i + 1} no tiene el formato esperado.`)
+  if (!esEntero(p.id) || p.id <= 0) return falla(`El pago de deuda ${i + 1} no tiene un identificador válido.`)
+  if (!esEntero(p.deudaId) || !deudasPorId.has(p.deudaId)) return falla(`El pago de deuda ${i + 1} usa una deuda que no existe en la copia.`)
+  if (!esEntero(p.monto) || p.monto <= 0) return falla(`El pago de deuda ${i + 1} tiene un monto no válido.`)
+  if (!esEntero(p.interes) || p.interes < 0) return falla(`El pago de deuda ${i + 1} tiene un interés no válido.`)
+  if (!esEntero(p.aCapital)) return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
+  if (!esFechaValida(p.fecha)) return falla(`El pago de deuda ${i + 1} tiene una fecha no válida.`)
+  if (p.fechaCuota !== undefined && !esFechaValida(p.fechaCuota)) return falla(`El pago de deuda ${i + 1} tiene una fecha de cuota no válida.`)
+  if (p.movimientoId !== undefined && !esEntero(p.movimientoId)) return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
+  const enlazado = p.movimientoId !== undefined && movimientosPorId.has(p.movimientoId)
+  return {
+    id: p.id,
+    deudaId: p.deudaId,
+    monto: p.monto,
+    interes: p.interes,
+    aCapital: p.aCapital,
+    fecha: p.fecha,
+    ...(p.fechaCuota ? { fechaCuota: p.fechaCuota } : {}),
+    ...(enlazado ? { movimientoId: p.movimientoId as number } : {}),
+  }
+}
+
+function validarAjuste(a: unknown, i: number): Ajuste {
+  if (!esObjeto(a)) return falla(`La preferencia ${i + 1} no tiene el formato esperado.`)
+  if (a.clave === 'deudaExtra' && esEntero(a.valor) && a.valor >= 0) return { clave: 'deudaExtra', valor: a.valor }
+  if (a.clave === 'deudaEstrategia' && (a.valor === 'bola' || a.valor === 'avalancha')) {
+    return { clave: 'deudaEstrategia', valor: a.valor }
+  }
+  return falla(`La preferencia ${i + 1} no es válida.`)
+}
+
 function validarMovimiento(m: unknown, i: number, categoriasPorId: Map<number, Categoria>): Movimiento {
   if (!esObjeto(m)) return falla(`El movimiento ${i + 1} no tiene el formato esperado.`)
   if (!esEntero(m.id) || m.id <= 0) return falla(`El movimiento ${i + 1} no tiene un identificador válido.`)
@@ -154,7 +233,16 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   // Las copias de la versión 1 son anteriores a los ahorros: no traen metas ni aportes.
   const metasCrudas = datos.version >= 2 ? datos.metas : []
   const aportesCrudos = datos.version >= 2 ? datos.aportes : []
-  if (!Array.isArray(metasCrudas) || !Array.isArray(aportesCrudos)) falla('A la copia le faltan datos.')
+  // Las de la versión 2 son anteriores a las deudas.
+  const deudasCrudas = datos.version >= 3 ? datos.deudas : []
+  const pagosCrudos = datos.version >= 3 ? datos.pagosDeuda : []
+  const ajustesCrudos = datos.version >= 3 ? datos.ajustes : []
+  if (
+    !Array.isArray(metasCrudas) || !Array.isArray(aportesCrudos) ||
+    !Array.isArray(deudasCrudas) || !Array.isArray(pagosCrudos) || !Array.isArray(ajustesCrudos)
+  ) {
+    falla('A la copia le faltan datos.')
+  }
 
   const categorias = datos.categorias.map(validarCategoria)
   sinRepetidos(categorias.map((c) => c.id!), 'identificadores de categoría')
@@ -169,17 +257,41 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   )
   sinRepetidos(aportes.map((a) => a.id!), 'identificadores de aporte')
 
-  return { app: 'mis-finanzas', version: datos.version, exportadoEn: datos.exportadoEn, categorias, movimientos, metas, aportes }
+  const deudas = deudasCrudas.map(validarDeuda)
+  sinRepetidos(deudas.map((d) => d.id!), 'identificadores de deuda')
+  const pagosDeuda = pagosCrudos.map((p, i) =>
+    validarPagoDeuda(p, i, new Set(deudas.map((d) => d.id!)), new Set(movimientos.map((m) => m.id!))),
+  )
+  sinRepetidos(pagosDeuda.map((p) => p.id!), 'identificadores de pago de deuda')
+  const ajustes = ajustesCrudos.map(validarAjuste)
+  if (new Set(ajustes.map((a) => a.clave)).size !== ajustes.length) falla('La copia tiene preferencias repetidas.')
+
+  return {
+    app: 'mis-finanzas',
+    version: datos.version,
+    exportadoEn: datos.exportadoEn,
+    categorias,
+    movimientos,
+    metas,
+    aportes,
+    deudas,
+    pagosDeuda,
+    ajustes,
+  }
 }
 
 /** Reemplaza todo lo que hay en el teléfono por el contenido de la copia (todo o nada). */
 export async function restaurarRespaldo(respaldo: Respaldo): Promise<void> {
-  await db.transaction('rw', db.categorias, db.movimientos, db.metas, db.aportes, async () => {
-    await Promise.all([db.categorias.clear(), db.movimientos.clear(), db.metas.clear(), db.aportes.clear()])
+  const tablas = [db.categorias, db.movimientos, db.metas, db.aportes, db.deudas, db.pagosDeuda, db.ajustes]
+  await db.transaction('rw', tablas, async () => {
+    await Promise.all(tablas.map((t) => t.clear()))
     await db.categorias.bulkAdd(respaldo.categorias)
     await db.movimientos.bulkAdd(respaldo.movimientos)
     await db.metas.bulkAdd(respaldo.metas)
     await db.aportes.bulkAdd(respaldo.aportes)
+    await db.deudas.bulkAdd(respaldo.deudas)
+    await db.pagosDeuda.bulkAdd(respaldo.pagosDeuda)
+    await db.ajustes.bulkAdd(respaldo.ajustes)
   })
 }
 

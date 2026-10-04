@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Presupuesto from './pantallas/Presupuesto'
 import Ahorros from './pantallas/Ahorros'
 import Categorias from './pantallas/Categorias'
+import Deudas from './pantallas/Deudas'
 import Respaldo from './pantallas/Respaldo'
 
 type Pestana = 'presupuesto' | 'ahorros' | 'deudas' | 'mas'
@@ -12,10 +13,6 @@ const PESTANAS: { id: Pestana; icono: string; nombre: string }[] = [
   { id: 'deudas', icono: '📉', nombre: 'Deudas' },
   { id: 'mas', icono: '⚙️', nombre: 'Más' },
 ]
-
-const PROXIMAMENTE: Partial<Record<Pestana, string>> = {
-  deudas: 'Aquí armarás tu plan para pagar deudas. Llega en una fase próxima.',
-}
 
 export default function App() {
   const [activa, setActiva] = useState<Pestana>('presupuesto')
@@ -30,16 +27,12 @@ export default function App() {
       <main className="contenido">
         {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} />}
         {activa === 'ahorros' && <Ahorros />}
+        {activa === 'deudas' && <Deudas />}
         {activa === 'mas' && (
           <>
             <Respaldo />
             <Categorias />
           </>
-        )}
-        {PROXIMAMENTE[activa] && (
-          <div className="tarjeta vacia">
-            <p>{PROXIMAMENTE[activa]}</p>
-          </div>
         )}
       </main>
 

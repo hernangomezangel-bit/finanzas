@@ -77,7 +77,7 @@ export default function Respaldo() {
       await restaurarRespaldo(pendiente)
       setMensaje({
         tipo: 'ok',
-        texto: `Listo: se restauraron ${pendiente.movimientos.length} movimientos, ${pendiente.categorias.length} categorías y ${pendiente.metas.length} metas.`,
+        texto: `Listo: se restauraron ${pendiente.movimientos.length} movimientos, ${pendiente.categorias.length} categorías, ${pendiente.metas.length} metas y ${pendiente.deudas.length} deudas.`,
       })
     } catch {
       setMensaje({ tipo: 'error', texto: 'No se pudo restaurar la copia. Tus datos actuales no se cambiaron.' })
@@ -121,7 +121,13 @@ export default function Respaldo() {
             <strong>{pendiente.categorias.length} categorías</strong>
             {pendiente.version >= 2 && (
               <>
-                {' '}y <strong>{pendiente.metas.length} metas de ahorro</strong>
+                {pendiente.version >= 3 ? ', ' : ' y '}
+                <strong>{pendiente.metas.length} metas de ahorro</strong>
+              </>
+            )}
+            {pendiente.version >= 3 && (
+              <>
+                {' '}y <strong>{pendiente.deudas.length} deudas</strong>
               </>
             )}
             .
@@ -147,5 +153,5 @@ function textoDias(dias: number): string {
 
 /** Copia vacía solo para preguntarle al navegador si sabe compartir este tipo de archivo. */
 function vacio(): DatosRespaldo {
-  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [] }
+  return { app: 'mis-finanzas', version: 1, exportadoEn: new Date().toISOString(), categorias: [], movimientos: [], metas: [], aportes: [], deudas: [], pagosDeuda: [], ajustes: [] }
 }
