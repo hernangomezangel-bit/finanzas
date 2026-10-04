@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Presupuesto from './pantallas/Presupuesto'
 import Categorias from './pantallas/Categorias'
+import Respaldo from './pantallas/Respaldo'
 
 type Pestana = 'presupuesto' | 'ahorros' | 'deudas' | 'mas'
 
@@ -27,8 +28,13 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        {activa === 'presupuesto' && <Presupuesto />}
-        {activa === 'mas' && <Categorias />}
+        {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} />}
+        {activa === 'mas' && (
+          <>
+            <Respaldo />
+            <Categorias />
+          </>
+        )}
         {PROXIMAMENTE[activa] && (
           <div className="tarjeta vacia">
             <p>{PROXIMAMENTE[activa]}</p>

@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
 import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import Dona, { type Tajada } from '../componentes/Dona'
 import FormMovimiento from './FormMovimiento'
 
@@ -10,7 +11,7 @@ const COLORES = ['#0f766e', '#d97706', '#2563eb', '#be185d', '#7c3aed', '#65a30d
 
 type Formulario = { movimiento?: Movimiento } | null
 
-export default function Presupuesto() {
+export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }) {
   const [mes, setMes] = useState(mesDe(hoy()))
   const [formulario, setFormulario] = useState<Formulario>(null)
 
@@ -45,6 +46,8 @@ export default function Presupuesto() {
 
   return (
     <>
+      <AvisoRespaldo alIr={irARespaldo} />
+
       <div className="selector-mes">
         <button onClick={() => setMes(moverMes(mes, -1))} aria-label="Mes anterior">‹</button>
         <strong>{nombreMes(mes)}</strong>
