@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Ajuste, type Deuda, type PagoDeuda } from '../db'
-import { aDeudaPlan, fechaCuota, guardarAjuste } from '../deudas'
+import { calcularPlan, fechaCuota, guardarAjuste } from '../deudas'
 import { fechaCorta, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { pesos } from '../formato'
 import { usePromedioVariable } from '../ingresos'
-import { simular, type Estrategia, type ResultadoPlan } from '../plan'
+import type { Estrategia, ResultadoPlan } from '../plan'
 import CampoMonto from '../componentes/CampoMonto'
 import GraficaSaldo from '../componentes/GraficaSaldo'
 import FormPago from './FormPago'
@@ -42,18 +42,13 @@ function Contenido({
   const variables = usePromedioVariable(mesDe(hoy()))
 
   const pagosDe = (id: number) => pagos.filter((p) => p.deudaId === id)
-  const activas = useMemo(
-    () => deudas.map((d) => aDeudaPlan(d, pagos.filter((p) => p.deudaId === d.id))).filter((d) => d.saldo > 0),
-    [deudas, pagos],
+  const { activas, bola, avalancha, recomendada, siguiendo, resultado } = useMemo(
+    () => calcularPlan(deudas, pagos, extra, elegida),
+    [deudas, pagos, extra, elegida],
   )
-  const bola = useMemo(() => simular(activas, extra, 'bola'), [activas, extra])
-  const avalancha = useMemo(() => simular(activas, extra, 'avalancha'), [activas, extra])
 
   const minimos = activas.reduce((s, d) => s + d.minimo, 0)
   const viable = bola.viable && avalancha.viable
-  const recomendada: Estrategia = avalancha.interesTotal <= bola.interesTotal ? 'avalancha' : 'bola'
-  const siguiendo = elegida ?? recomendada
-  const resultado = siguiendo === 'bola' ? bola : avalancha
   const nombreDeuda = (id: number) => deudas.find((d) => d.id === id)?.nombre ?? 'Deuda'
 
   function cambiarExtra(valor: number) {

@@ -7,7 +7,7 @@ import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import PendientesJornadas from '../componentes/PendientesJornadas'
-import PendientesRecurrentes from '../componentes/PendientesRecurrentes'
+import PorRegistrar from '../componentes/PorRegistrar'
 import ResumenJornadas from '../componentes/ResumenJornadas'
 import Dona, { type Tajada } from '../componentes/Dona'
 import FormMovimiento from './FormMovimiento'
@@ -71,7 +71,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
     <>
       <AvisoRespaldo alIr={irARespaldo} />
       <PendientesJornadas />
-      <PendientesRecurrentes />
+      <PorRegistrar />
 
       <div className="selector-mes">
         <button onClick={() => setMes(moverMes(mes, -1))} aria-label="Mes anterior">‹</button>

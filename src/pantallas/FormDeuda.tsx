@@ -56,7 +56,13 @@ export default function FormDeuda({
     }
     if (editando) {
       // El saldo que se escribe es el de hoy; el inicial se ajusta para que el historial de pagos siga cuadrando.
-      await db.deudas.put({ ...datos, id: deuda.id, creada: deuda.creada, saldoInicial: saldo + capitalPagado })
+      await db.deudas.put({
+        ...datos,
+        id: deuda.id,
+        creada: deuda.creada,
+        saldoInicial: saldo + capitalPagado,
+        ...(deuda.propuestasDesde ? { propuestasDesde: deuda.propuestasDesde } : {}),
+      })
     } else {
       await db.deudas.add({ ...datos, saldoInicial: saldo, creada: hoy() })
     }
@@ -111,7 +117,7 @@ export default function FormDeuda({
       <CampoMonto etiqueta="Pago mínimo mensual" valor={pagoMinimo} alCambiar={setPagoMinimo} />
 
       <label className="campo">
-        Día del mes en que pagas (opcional)
+        Día del mes en que pagas
         <input
           inputMode="numeric"
           placeholder="Ej: 15"
@@ -119,6 +125,10 @@ export default function FormDeuda({
           value={diaPago}
           onChange={(e) => setDiaPago(e.target.value.replace(/\D/g, ''))}
         />
+        <small className="ayuda">
+          Con el día de pago, la app te propone el pago en Presupuesto cuando llegue (con el monto del plan, incluido
+          el dinero extra si lo hay). Sin él, tendrás que registrar los pagos tú.
+        </small>
       </label>
 
       <div className="campo">

@@ -23,8 +23,9 @@ import type { TipoTasa } from './plan'
  * Versión 3: agrega deudas, pagos de deudas y las preferencias del plan.
  * Versión 4: agrega movimientos recurrentes y sus vencimientos, y marca los ingresos variables.
  * Versión 5: agrega los trabajos por días con meta diaria y sus jornadas.
+ * Versión 6: las deudas guardan desde cuándo se proponen sus cuotas, y los pagos pueden ser cuotas omitidas.
  */
-export const VERSION_RESPALDO = 5
+export const VERSION_RESPALDO = 6
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -246,7 +247,8 @@ function validarAporte(a: unknown, i: number, metasPorId: Set<number>, movimient
   }
 }
 
-function validarDeuda(d: unknown, i: number): Deuda {
+/** `propuestasDesdeSiFalta`: para copias anteriores a la versión 6, que no traen esa fecha. */
+function validarDeuda(d: unknown, i: number, propuestasDesdeSiFalta?: string): Deuda {
   if (!esObjeto(d)) return falla(`La deuda ${i + 1} no tiene el formato esperado.`)
   if (!esEntero(d.id) || d.id <= 0) return falla(`La deuda ${i + 1} no tiene un identificador válido.`)
   if (typeof d.nombre !== 'string' || !d.nombre.trim() || d.nombre.length > 40) return falla(`La deuda ${i + 1} tiene un nombre no válido.`)
@@ -257,6 +259,8 @@ function validarDeuda(d: unknown, i: number): Deuda {
   if (!esEntero(d.pagoMinimo) || d.pagoMinimo <= 0) return falla(`La deuda "${d.nombre}" tiene un pago mínimo no válido.`)
   if (d.diaPago !== undefined && (!esEntero(d.diaPago) || d.diaPago < 1 || d.diaPago > 31)) return falla(`La deuda "${d.nombre}" tiene un día de pago no válido.`)
   if (!esFechaValida(d.creada)) return falla(`La deuda "${d.nombre}" tiene una fecha de creación no válida.`)
+  if (d.propuestasDesde !== undefined && !esFechaValida(d.propuestasDesde)) return falla(`La deuda "${d.nombre}" tiene una fecha de inicio de propuestas no válida.`)
+  const propuestasDesde = (d.propuestasDesde as string | undefined) ?? propuestasDesdeSiFalta
   return {
     id: d.id,
     nombre: d.nombre,
@@ -267,6 +271,7 @@ function validarDeuda(d: unknown, i: number): Deuda {
     pagoMinimo: d.pagoMinimo,
     creada: d.creada,
     ...(d.diaPago !== undefined ? { diaPago: d.diaPago } : {}),
+    ...(propuestasDesde ? { propuestasDesde } : {}),
   }
 }
 
@@ -274,9 +279,17 @@ function validarPagoDeuda(p: unknown, i: number, deudasPorId: Set<number>, movim
   if (!esObjeto(p)) return falla(`El pago de deuda ${i + 1} no tiene el formato esperado.`)
   if (!esEntero(p.id) || p.id <= 0) return falla(`El pago de deuda ${i + 1} no tiene un identificador válido.`)
   if (!esEntero(p.deudaId) || !deudasPorId.has(p.deudaId)) return falla(`El pago de deuda ${i + 1} usa una deuda que no existe en la copia.`)
-  if (!esEntero(p.monto) || p.monto <= 0) return falla(`El pago de deuda ${i + 1} tiene un monto no válido.`)
-  if (!esEntero(p.interes) || p.interes < 0) return falla(`El pago de deuda ${i + 1} tiene un interés no válido.`)
-  if (!esEntero(p.aCapital)) return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
+  if (p.omitida !== undefined && typeof p.omitida !== 'boolean') return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
+  const omitida = p.omitida === true
+  // Una cuota omitida no es un pago: no mueve dinero y siempre indica a qué cuota se refiere.
+  if (omitida) {
+    if (p.monto !== 0 || p.interes !== 0 || p.aCapital !== 0) return falla(`La cuota omitida ${i + 1} no puede tener dinero.`)
+    if (!esFechaValida(p.fechaCuota)) return falla(`La cuota omitida ${i + 1} no indica su fecha.`)
+  } else {
+    if (!esEntero(p.monto) || p.monto <= 0) return falla(`El pago de deuda ${i + 1} tiene un monto no válido.`)
+    if (!esEntero(p.interes) || p.interes < 0) return falla(`El pago de deuda ${i + 1} tiene un interés no válido.`)
+    if (!esEntero(p.aCapital)) return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
+  }
   if (!esFechaValida(p.fecha)) return falla(`El pago de deuda ${i + 1} tiene una fecha no válida.`)
   if (p.fechaCuota !== undefined && !esFechaValida(p.fechaCuota)) return falla(`El pago de deuda ${i + 1} tiene una fecha de cuota no válida.`)
   if (p.movimientoId !== undefined && !esEntero(p.movimientoId)) return falla(`El pago de deuda ${i + 1} tiene un dato no válido.`)
@@ -284,12 +297,13 @@ function validarPagoDeuda(p: unknown, i: number, deudasPorId: Set<number>, movim
   return {
     id: p.id,
     deudaId: p.deudaId,
-    monto: p.monto,
-    interes: p.interes,
-    aCapital: p.aCapital,
+    monto: p.monto as number,
+    interes: p.interes as number,
+    aCapital: p.aCapital as number,
     fecha: p.fecha,
     ...(p.fechaCuota ? { fechaCuota: p.fechaCuota } : {}),
     ...(enlazado ? { movimientoId: p.movimientoId as number } : {}),
+    ...(omitida ? { omitida: true } : {}),
   }
 }
 
@@ -368,7 +382,9 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   )
   sinRepetidos(aportes.map((a) => a.id!), 'identificadores de aporte')
 
-  const deudas = deudasCrudas.map(validarDeuda)
+  // Las copias anteriores a la versión 6 no traen desde cuándo se proponen las cuotas: se empieza hoy.
+  const versionCopia = datos.version
+  const deudas = deudasCrudas.map((d, i) => validarDeuda(d, i, versionCopia < 6 ? hoy() : undefined))
   sinRepetidos(deudas.map((d) => d.id!), 'identificadores de deuda')
   const pagosDeuda = pagosCrudos.map((p, i) =>
     validarPagoDeuda(p, i, new Set(deudas.map((d) => d.id!)), new Set(movimientos.map((m) => m.id!))),

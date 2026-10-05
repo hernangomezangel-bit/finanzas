@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { hoy } from './fechas'
 import type { Estrategia, TipoTasa } from './plan'
 
 export type Tipo = 'gasto' | 'ingreso'
@@ -116,6 +117,11 @@ export interface Deuda {
   /** Día del mes (1 a 31) en que se paga la cuota; opcional. */
   diaPago?: number
   creada: string
+  /**
+   * Desde cuándo se proponen las cuotas en Presupuesto. Si falta, desde `creada`. Las deudas que ya existían
+   * al activarse esta función empiezan hoy, para no proponer de golpe cuotas de meses pasados.
+   */
+  propuestasDesde?: string
 }
 
 export interface PagoDeuda {
@@ -131,6 +137,8 @@ export interface PagoDeuda {
   fechaCuota?: string
   /** Gasto que este pago generó en el Presupuesto, si se marcó esa opción. */
   movimientoId?: number
+  /** Cuota que se dejó pasar sin pagar por la app ("omitir"): monto 0, solo evita que se vuelva a proponer. */
+  omitida?: boolean
 }
 
 /** Preferencias del plan de deudas; viajan en la copia de seguridad. */
@@ -217,6 +225,12 @@ class BaseFinanzas extends Dexie {
     this.version(5).stores({
       fuentes: '++id',
       jornadas: '++id, fuenteId, fecha',
+    })
+    // Sin tablas nuevas: solo marca desde cuándo se proponen las cuotas de las deudas que ya existían.
+    this.version(6).stores({}).upgrade(async (tx) => {
+      await tx.table<Deuda>('deudas').toCollection().modify((d) => {
+        d.propuestasDesde = hoy()
+      })
     })
     this.on('populate', (tx) => {
       tx.table('categorias').bulkAdd(CATEGORIAS_INICIALES)

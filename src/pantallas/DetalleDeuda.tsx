@@ -26,9 +26,11 @@ export default function DetalleDeuda({
   const noCubre = saldo > 0 && deuda.pagoMinimo <= interes
 
   async function quitarPago(pago: PagoDeuda) {
-    const aviso = pago.movimientoId !== undefined
-      ? '¿Eliminar este pago? Tu deuda volverá a subir y también se quitará su gasto del Presupuesto.'
-      : '¿Eliminar este pago? Tu deuda volverá a subir.'
+    const aviso = pago.omitida
+      ? '¿Quitar esta omisión? La cuota volverá a proponerse en Presupuesto.'
+      : pago.movimientoId !== undefined
+        ? '¿Eliminar este pago? Tu deuda volverá a subir y también se quitará su gasto del Presupuesto.'
+        : '¿Eliminar este pago? Tu deuda volverá a subir.'
     if (window.confirm(aviso)) await eliminarPago(pago)
   }
 
@@ -84,17 +86,34 @@ export default function DetalleDeuda({
             {lista.map((p) => (
               <li key={p.id}>
                 <button onClick={() => quitarPago(p)} aria-label={`Pago del ${fechaCorta(p.fecha)}, toca para eliminarlo`}>
-                  <span className="texto-mov">
-                    <span>{fechaCorta(p.fecha)}</span>
-                    <small>Interés {pesos(p.interes)} · {p.aCapital >= 0 ? `Capital ${pesos(p.aCapital)}` : `Deuda +${pesos(-p.aCapital)}`}</small>
-                  </span>
-                  <strong className="ingreso">{pesos(p.monto)}</strong>
+                  {p.omitida ? (
+                    <>
+                      <span className="texto-mov">
+                        <span>Cuota del {fechaCorta(p.fechaCuota ?? p.fecha)}</span>
+                        <small>Omitida: no se registró pago en la app</small>
+                      </span>
+                      <strong className="etiqueta">Omitida</strong>
+                    </>
+                  ) : (
+                    <>
+                      <span className="texto-mov">
+                        <span>{fechaCorta(p.fecha)}</span>
+                        <small>Interés {pesos(p.interes)} · {p.aCapital >= 0 ? `Capital ${pesos(p.aCapital)}` : `Deuda +${pesos(-p.aCapital)}`}</small>
+                      </span>
+                      <strong className="ingreso">{pesos(p.monto)}</strong>
+                    </>
+                  )}
                 </button>
               </li>
             ))}
           </ul>
         )}
         {lista.length > 0 && <p className="pequeno nota-pie">Toca un pago para eliminarlo si te equivocaste.</p>}
+        {deuda.diaPago === undefined && saldo > 0 && (
+          <p className="pequeno nota-pie">
+            Pon el día de pago (Editar deuda) y la app te propondrá cada pago en Presupuesto.
+          </p>
+        )}
       </section>
 
       <div className="acciones-meta">

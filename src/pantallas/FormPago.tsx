@@ -11,6 +11,8 @@ export default function FormPago({
   saldo,
   montoSugerido,
   fechaCuota,
+  fechaInicial,
+  alOmitir,
   alCerrar,
 }: {
   deuda: Deuda
@@ -18,10 +20,14 @@ export default function FormPago({
   montoSugerido?: number
   /** Cuota del plan que se está marcando como pagada, si viene de ahí. */
   fechaCuota?: string
+  /** Fecha del pago al abrir el formulario; por defecto, hoy. */
+  fechaInicial?: string
+  /** Si viene, se ofrece "Omitir esta vez" para dejar pasar la cuota sin registrarla. */
+  alOmitir?: () => Promise<void>
   alCerrar: () => void
 }) {
   const [monto, setMonto] = useState(montoSugerido ?? deuda.pagoMinimo)
-  const [fecha, setFecha] = useState(hoy())
+  const [fecha, setFecha] = useState(fechaInicial ?? hoy())
   const [comoGasto, setComoGasto] = useState(true)
   const [error, setError] = useState('')
 
@@ -72,6 +78,17 @@ export default function FormPago({
 
       {error && <p className="error" role="alert">{error}</p>}
       <button className="boton primario" onClick={guardar}>Guardar pago</button>
+      {alOmitir && (
+        <button
+          className="boton secundario"
+          onClick={async () => {
+            await alOmitir()
+            alCerrar()
+          }}
+        >
+          Omitir esta vez
+        </button>
+      )}
     </Hoja>
   )
 }
