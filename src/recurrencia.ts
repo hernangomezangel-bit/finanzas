@@ -97,6 +97,28 @@ export function ventanaDeFijo(frecuencia?: Frecuencia): number {
   return frecuencia === 'diaria' ? 6 : frecuencia === 'semanal' ? 34 : VENTANA_DIAS
 }
 
+/**
+ * Un recurrente "por día" tiene un monto diario y días de la semana de descanso: cada mes se registra de una vez el
+ * total (monto × días del mes que no son de descanso), el último día del mes. Esos recurrentes son mensuales con dia 31.
+ */
+export const DIAS_DEL_COBRO_POR_DIA = [31]
+
+/** Cuántos días de ese mes (AAAA-MM) se trabajan: todos menos los que caen en un día de descanso (0 = domingo … 6 = sábado). */
+export function diasTrabajados(mes: string, diasLibres: number[]): number {
+  const [anio, m] = mes.split('-').map(Number)
+  const total = new Date(anio, m, 0).getDate()
+  let trabajados = 0
+  for (let dia = 1; dia <= total; dia++) {
+    if (!diasLibres.includes(new Date(anio, m - 1, dia).getDay())) trabajados++
+  }
+  return trabajados
+}
+
+/** Lo que vale un vencimiento: el monto tal cual, o el total del mes si el recurrente se cobra por día trabajado. */
+export function montoDelVencimiento(r: { monto: number; diasLibres?: number[] }, fecha: string): number {
+  return r.diasLibres === undefined ? r.monto : r.monto * diasTrabajados(fecha.slice(0, 7), r.diasLibres)
+}
+
 export function claveOcurrencia(recurrenteId: number, fecha: string): string {
   return `${recurrenteId}|${fecha}`
 }

@@ -30,8 +30,9 @@ import type { TipoTasa } from './plan'
  * Versión 8: los gastos pueden ser cuotas programadas de deudas o ahorros que la app creó sola.
  * Versión 9: también los movimientos recurrentes (gastos e ingresos fijos) se programan por adelantado.
  * Versión 10: los recurrentes pueden repetirse todos los días o por días de la semana, no solo por días del mes.
+ * Versión 11: los recurrentes pueden cobrarse por día trabajado, con días de descanso (el total del mes de una vez).
  */
-export const VERSION_RESPALDO = 10
+export const VERSION_RESPALDO = 11
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -146,6 +147,18 @@ function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, C
         ? dias.length >= 1 && dias.length <= 7 && dias.every((d) => esEntero(d) && d >= 0 && d <= 6)
         : dias.length >= 1 && dias.length <= 4 && dias.every((d) => esEntero(d) && d >= 1 && d <= 31))
   if (!diasValidos) return falla(`El recurrente "${r.nombre}" tiene días no válidos.`)
+  // Por día trabajado: el monto es diario, y se registra el total de cada mes el último día (mensual, día 31).
+  let diasLibres: number[] | undefined
+  if (r.diasLibres !== undefined) {
+    const libres = r.diasLibres
+    if (
+      !Array.isArray(libres) || libres.length > 6 || !libres.every((d) => esEntero(d) && d >= 0 && d <= 6) ||
+      r.frecuencia === 'diaria' || r.frecuencia === 'semanal' || (r.dias as number[]).length !== 1 || (r.dias as number[])[0] !== 31
+    ) {
+      return falla(`El recurrente "${r.nombre}" tiene días de descanso no válidos.`)
+    }
+    diasLibres = [...new Set(libres as number[])].sort((a, b) => a - b)
+  }
   if (!esFechaValida(r.creado)) return falla(`El recurrente "${r.nombre}" tiene una fecha de inicio no válida.`)
   if (typeof r.activo !== 'boolean') return falla(`El recurrente "${r.nombre}" tiene un dato no válido.`)
   return {
@@ -158,6 +171,7 @@ function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, C
     // Mensual se guarda sin "frecuencia", como siempre.
     ...(r.frecuencia === 'diaria' || r.frecuencia === 'semanal' ? { frecuencia: r.frecuencia } : {}),
     dias: [...new Set(r.dias as number[])].sort((a, b) => a - b),
+    ...(diasLibres ? { diasLibres } : {}),
     creado: r.creado,
     activo: r.activo,
   }

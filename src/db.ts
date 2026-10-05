@@ -58,6 +58,11 @@ export interface Recurrente {
    * uno o varios. Diaria: vacío.
    */
   dias: number[]
+  /**
+   * Si viene, `monto` es lo de cada día y esto son los días de la semana de descanso (0 = domingo … 6 = sábado, puede
+   * ir vacío). Cada mes se registra el total (monto × días trabajados) el último día del mes; `dias` es [31].
+   */
+  diasLibres?: number[]
   /** Desde cuándo cuenta; no se proponen fechas anteriores. */
   creado: string
   activo: boolean

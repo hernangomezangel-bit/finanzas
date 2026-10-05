@@ -1,8 +1,8 @@
 import { db, type Movimiento, type Recurrente } from './db'
-import { claveOcurrencia, pendientes, type PatronFijo, type Vencimiento } from './recurrencia'
+import { claveOcurrencia, montoDelVencimiento, pendientes, type PatronFijo, type Vencimiento } from './recurrencia'
 import { hoy } from './fechas'
 import { buscarProgramado } from './programadosBase'
-import { esOcurrencia, textoPatron } from './repeticion'
+import { esOcurrencia, textoPatron, textoPorDia } from './repeticion'
 
 export interface PendienteConDatos extends Vencimiento {
   recurrente: Recurrente
@@ -27,7 +27,7 @@ export async function leerPendientes(): Promise<PendienteConDatos[]> {
   const montos = new Map(programados.map((m) => [claveOcurrencia(m.programado!.refId, m.programado!.fechaCuota), m.monto]))
   return lista.map((v) => {
     const recurrente = porId.get(v.recurrenteId)!
-    return { ...v, recurrente, monto: montos.get(claveOcurrencia(v.recurrenteId, v.fecha)) ?? recurrente.monto }
+    return { ...v, recurrente, monto: montos.get(claveOcurrencia(v.recurrenteId, v.fecha)) ?? montoDelVencimiento(recurrente, v.fecha) }
   })
 }
 
@@ -55,7 +55,8 @@ export async function registrarVencimiento(
       })
     }
     await db.ocurrencias.add({ recurrenteId: recurrente.id!, fecha, estado: 'registrada', movimientoId })
-    if (recordarMonto) await db.recurrentes.update(recurrente.id!, { monto })
+    // En un recurrente por día, el monto de una vez es el total del mes, no el de cada día: no se recuerda.
+    if (recordarMonto && recurrente.diasLibres === undefined) await db.recurrentes.update(recurrente.id!, { monto })
   })
 }
 
@@ -183,6 +184,7 @@ export async function eliminarRecurrente(id: number): Promise<void> {
 }
 
 /** Cómo se repite un recurrente, en palabras: «Todos los días», «Cada semana: lunes y viernes», «Cada quincena: días 15 y 30»… */
-export function textoDias(recurrente: Pick<Recurrente, 'frecuencia' | 'dias'>): string {
+export function textoDias(recurrente: Pick<Recurrente, 'frecuencia' | 'dias' | 'diasLibres'>): string {
+  if (recurrente.diasLibres !== undefined) return textoPorDia(recurrente.diasLibres)
   return textoPatron(recurrente)
 }

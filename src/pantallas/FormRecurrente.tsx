@@ -3,10 +3,22 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Recurrente, type Tipo } from '../db'
 import { hoy } from '../fechas'
 import { eliminarRecurrente } from '../recurrentes'
-import { esRepeticionValida, patronDe, repeticionDe, repeticionPorDefecto, type Repeticion } from '../repeticion'
+import { pesos } from '../formato'
+import { DIAS_DEL_COBRO_POR_DIA, diasTrabajados } from '../recurrencia'
+import {
+  ABREVIATURAS_DIA,
+  esRepeticionValida,
+  patronDe,
+  repeticionDe,
+  repeticionPorDefecto,
+  type Repeticion,
+} from '../repeticion'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
 import SelectorRepeticion from '../componentes/SelectorRepeticion'
+
+/** Lunes primero, que es como se piensa la semana. */
+const ORDEN_SEMANA = [1, 2, 3, 4, 5, 6, 0]
 
 export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: Recurrente; alCerrar: () => void }) {
   const editando = recurrente !== undefined
@@ -17,6 +29,9 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
   const [repeticion, setRepeticion] = useState<Repeticion>(() =>
     recurrente ? repeticionDe(recurrente) : repeticionPorDefecto('mensual', hoy()),
   )
+  // Por día: el monto es el de cada día trabajado y la app registra el total del mes (menos los días de descanso).
+  const [porDia, setPorDia] = useState(recurrente?.diasLibres !== undefined)
+  const [diasLibres, setDiasLibres] = useState<number[]>(recurrente?.diasLibres ?? [])
   const [error, setError] = useState('')
 
   const categorias = useLiveQuery(() => db.categorias.where('tipo').equals(tipo).toArray(), [tipo])
@@ -28,11 +43,17 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
     setCategoriaId(null)
   }
 
+  const libresOrdenados = [...diasLibres].sort((a, b) => a - b)
+  const mesActual = hoy().slice(0, 7)
+  const diasDelMes = diasTrabajados(mesActual, diasLibres)
+
   async function guardar() {
     if (monto <= 0) return setError('Escribe un monto mayor a cero.')
     if (categoriaId === null) return setError('Elige una categoría.')
-    const patron = patronDe(repeticion)
-    if (!patron || !esRepeticionValida(repeticion)) {
+    if (porDia && diasLibres.length >= 7) return setError('Deja al menos un día de trabajo a la semana.')
+    // Por día se registra el total de cada mes el último día del mes: mensual, día 31.
+    const patron = porDia ? { dias: DIAS_DEL_COBRO_POR_DIA } : patronDe(repeticion)
+    if (!patron || (!porDia && !esRepeticionValida(repeticion))) {
       return setError(
         repeticion.tipo === 'semanal'
           ? 'Elige al menos un día de la semana.'
@@ -52,11 +73,16 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
     }
     if (editando) {
       // undefined borra la frecuencia al volver a mensual (que es lo que significa no tenerla).
-      await db.recurrentes.update(recurrente.id!, { ...datos, frecuencia: patron.frecuencia })
+      await db.recurrentes.update(recurrente.id!, {
+        ...datos,
+        frecuencia: 'frecuencia' in patron ? patron.frecuencia : undefined,
+        diasLibres: porDia ? libresOrdenados : undefined,
+      })
     } else {
       await db.recurrentes.add({
         ...datos,
-        ...(patron.frecuencia ? { frecuencia: patron.frecuencia } : {}),
+        ...('frecuencia' in patron && patron.frecuencia ? { frecuencia: patron.frecuencia } : {}),
+        ...(porDia ? { diasLibres: libresOrdenados } : {}),
         nota: '',
         creado: hoy(),
         activo: true,
@@ -94,7 +120,19 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
         />
       </label>
 
-      <CampoMonto etiqueta="Monto habitual" valor={monto} alCambiar={setMonto} autoFocus={!editando} />
+      <div className="campo">
+        ¿Cómo es el monto?
+        <div className="chips" role="group" aria-label="Cómo es el monto">
+          <button className={porDia ? 'chip' : 'chip activo'} aria-pressed={!porDia} onClick={() => setPorDia(false)}>
+            Un monto cada vez
+          </button>
+          <button className={porDia ? 'chip activo' : 'chip'} aria-pressed={porDia} onClick={() => setPorDia(true)}>
+            Un monto por cada día
+          </button>
+        </div>
+      </div>
+
+      <CampoMonto etiqueta={porDia ? 'Monto de cada día trabajado' : 'Monto habitual'} valor={monto} alCambiar={setMonto} autoFocus={!editando} />
 
       <div className="campo">
         Categoría
@@ -107,18 +145,47 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
         </div>
       </div>
 
-      <div className="campo">
-        ¿Cada cuánto?
-        <SelectorRepeticion
-          repeticion={repeticion}
-          fechaReferencia={hoy()}
-          alCambiar={(r) => {
-            setRepeticion(r)
-            setError('')
-          }}
-          permiteUnica={false}
-        />
-      </div>
+      {porDia ? (
+        <div className="campo">
+          {tipo === 'ingreso' ? '¿Qué días de la semana NO trabajas?' : '¿Qué días de la semana descansas (no cuentan)?'}
+          <div className="chips">
+            {ORDEN_SEMANA.map((dia) => {
+              const libre = diasLibres.includes(dia)
+              return (
+                <button
+                  key={dia}
+                  className={libre ? 'chip activo' : 'chip'}
+                  aria-pressed={libre}
+                  onClick={() => {
+                    setDiasLibres(libre ? diasLibres.filter((d) => d !== dia) : [...diasLibres, dia])
+                    setError('')
+                  }}
+                >
+                  {ABREVIATURAS_DIA[dia]}
+                </button>
+              )
+            })}
+          </div>
+          <small className="ayuda">
+            Cada mes la app registra de una vez el total: el monto de cada día por los días del mes que no son de descanso.
+            {monto > 0 &&
+              ` Este mes: ${diasDelMes} días × ${pesos(monto)} = ${pesos(diasDelMes * monto)}.`}
+          </small>
+        </div>
+      ) : (
+        <div className="campo">
+          ¿Cada cuánto?
+          <SelectorRepeticion
+            repeticion={repeticion}
+            fechaReferencia={hoy()}
+            alCambiar={(r) => {
+              setRepeticion(r)
+              setError('')
+            }}
+            permiteUnica={false}
+          />
+        </div>
+      )}
 
       {error && <p className="error" role="alert">{error}</p>}
       <button className="boton primario" onClick={guardar}>Guardar</button>

@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { fechaCorta } from '../fechas'
 import { pesos } from '../formato'
+import { montoDelVencimiento } from '../recurrencia'
 import { omitirVencimiento, registrarVencimiento, type PendienteConDatos } from '../recurrentes'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
 
 export default function FormOcurrencia({ pendiente, alCerrar }: { pendiente: PendienteConDatos; alCerrar: () => void }) {
   const { recurrente, fecha } = pendiente
+  const porDia = recurrente.diasLibres !== undefined
+  const habitual = montoDelVencimiento(recurrente, fecha)
   const [monto, setMonto] = useState(pendiente.monto)
   const [recordar, setRecordar] = useState(false)
   const [error, setError] = useState('')
@@ -25,11 +28,12 @@ export default function FormOcurrencia({ pendiente, alCerrar }: { pendiente: Pen
   return (
     <Hoja titulo={recurrente.nombre} alCerrar={alCerrar}>
       <p className="ayuda">
-        {recurrente.tipo === 'gasto' ? 'Gasto' : 'Ingreso'} del {fechaCorta(fecha)}. Lo habitual es {pesos(recurrente.monto)}.
+        {recurrente.tipo === 'gasto' ? 'Gasto' : 'Ingreso'} del {fechaCorta(fecha)}. Lo habitual es {pesos(habitual)}
+        {porDia && ` (${pesos(recurrente.monto)} por cada día trabajado del mes)`}.
       </p>
       <CampoMonto etiqueta="Monto de esta vez" valor={monto} alCambiar={setMonto} autoFocus />
 
-      {monto !== recurrente.monto && monto > 0 && (
+      {!porDia && monto !== recurrente.monto && monto > 0 && (
         <label className="casilla">
           <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
           <span>

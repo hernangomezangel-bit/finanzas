@@ -12,7 +12,7 @@ import {
   type Existente,
 } from './programadosPuro'
 import { omitirVencimiento } from './recurrentes'
-import { cuotasAbiertas, vencimientosAbiertos } from './recurrencia'
+import { cuotasAbiertas, montoDelVencimiento, vencimientosAbiertos } from './recurrencia'
 
 // Movimientos programados: la app crea sola, como movimientos normales de Presupuesto, las cuotas de cada deuda con
 // día de pago, las cuotas de cada ahorro programado y los gastos e ingresos fijos (recurrentes) de los próximos
@@ -94,7 +94,7 @@ async function calcularDeseadas(): Promise<Deseada[]> {
         refId: r.id!,
         fechaCuota: fecha,
         tipo: r.tipo,
-        monto: r.monto,
+        monto: montoDelVencimiento(r, fecha),
         nota: (r.nota || r.nombre).slice(0, 200),
         categoriaId: r.categoriaId,
       })

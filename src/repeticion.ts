@@ -100,6 +100,13 @@ export function textoRepeticion(r: Repeticion): string {
   }
 }
 
+/** Cómo se dice un recurrente por día trabajado: «Cada día, menos domingos · el total se registra al final de cada mes». */
+export function textoPorDia(diasLibres: number[]): string {
+  const libres = [...new Set(diasLibres)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+  const descanso = libres.length === 0 ? 'sin descansos' : `menos ${lista(libres.map((d) => NOMBRES_DIA[d]))}`
+  return `Cada día, ${descanso} · el total del mes se registra al final`
+}
+
 /** Texto de un patrón ya guardado. */
 export function textoPatron(patron: PatronFijo): string {
   return textoRepeticion(repeticionDe(patron))

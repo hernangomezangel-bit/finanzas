@@ -35,7 +35,7 @@ export default function Recurrentes() {
                     {textoDias(r)}{r.activo ? '' : ' · en pausa'}
                   </small>
                 </span>
-                <strong className={r.tipo}>{pesos(r.monto)}</strong>
+                <strong className={r.tipo}>{pesos(r.monto)}{r.diasLibres !== undefined && ' /día'}</strong>
                 <button onClick={() => setEdicion({ recurrente: r })}>Editar</button>
               </li>
             )
