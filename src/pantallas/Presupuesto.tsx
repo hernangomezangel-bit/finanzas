@@ -9,6 +9,7 @@ import { estaPendiente } from '../programadosPuro'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import PendientesJornadas from '../componentes/PendientesJornadas'
 import PorRegistrar from '../componentes/PorRegistrar'
+import RepetirFijos from '../componentes/RepetirFijos'
 import ResumenJornadas from '../componentes/ResumenJornadas'
 import Dona, { type Tajada } from '../componentes/Dona'
 import FormMovimiento from './FormMovimiento'
@@ -20,6 +21,7 @@ type Formulario = { movimiento?: Movimiento } | null
 export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }) {
   const [mes, setMes] = useState(mesDe(hoy()))
   const [formulario, setFormulario] = useState<Formulario>(null)
+  const [repitiendo, setRepitiendo] = useState(false)
 
   const movimientos = useLiveQuery(
     () => db.movimientos.where('fecha').between(`${mes}-01`, `${mes}-32`).reverse().sortBy('fecha'),
@@ -89,6 +91,8 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
         <strong>{nombreMes(mes)}</strong>
         <button onClick={() => setMes(moverMes(mes, 1))} aria-label="Mes siguiente">›</button>
       </div>
+
+      <button className="enlace-fijos" onClick={() => setRepitiendo(true)}>🔁 Elegir qué se repite cada mes</button>
 
       <div className="resumen">
         <div className="tarjeta dato">
@@ -219,6 +223,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
           alCerrar={() => setFormulario(null)}
         />
       )}
+      {repitiendo && <RepetirFijos mes={mes} alCerrar={() => setRepitiendo(false)} />}
     </>
   )
 }

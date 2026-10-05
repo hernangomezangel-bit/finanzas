@@ -388,5 +388,16 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .ayuda.automatico { color: var(--acento); font-weight: 600; }
 .monto-caja .unidad { font-size: 1rem; color: var(--suave); }
 
+.enlace-fijos {
+  display: block; width: 100%; min-height: 44px; margin: -4px 0 12px; border: 0; background: none;
+  color: var(--acento); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: center;
+}
+.lista-elegir { list-style: none; margin: 6px 0 0; padding: 0; }
+.lista-elegir li { border-top: 1px solid var(--borde); }
+.lista-elegir .casilla { margin: 0; padding: 10px 0; align-items: center; }
+.lista-elegir .elegir-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lista-elegir .elegir-texto small { color: var(--suave); }
+.boton:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
 .lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }

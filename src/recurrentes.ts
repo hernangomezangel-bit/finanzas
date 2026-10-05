@@ -73,19 +73,69 @@ export async function omitirVencimiento(recurrente: Recurrente, fecha: string): 
  */
 export async function crearMovimientoRecurrente(movimiento: Omit<Movimiento, 'id'>): Promise<void> {
   await db.transaction('rw', db.movimientos, db.recurrentes, db.ocurrencias, db.categorias, async () => {
-    const categoria = await db.categorias.get(movimiento.categoriaId)
     const movimientoId = await db.movimientos.add(movimiento)
-    const recurrenteId = await db.recurrentes.add({
-      nombre: (movimiento.nota || categoria?.nombre || 'Recurrente').slice(0, 40),
-      tipo: movimiento.tipo,
-      monto: movimiento.monto,
-      categoriaId: movimiento.categoriaId,
-      nota: movimiento.nota,
-      dias: [Number(movimiento.fecha.slice(8, 10))],
-      creado: movimiento.fecha,
-      activo: true,
-    })
-    await db.ocurrencias.add({ recurrenteId, fecha: movimiento.fecha, estado: 'registrada', movimientoId })
+    await volverRecurrente({ ...movimiento, id: movimientoId })
+  })
+}
+
+/** Crea el recurrente que corresponde a un movimiento y deja ese movimiento como su vencimiento ya registrado. */
+async function volverRecurrente(movimiento: Movimiento & { id: number }): Promise<void> {
+  const categoria = await db.categorias.get(movimiento.categoriaId)
+  const recurrenteId = await db.recurrentes.add({
+    nombre: (movimiento.nota || categoria?.nombre || 'Recurrente').slice(0, 40),
+    tipo: movimiento.tipo,
+    monto: movimiento.monto,
+    categoriaId: movimiento.categoriaId,
+    nota: movimiento.nota,
+    dias: [Number(movimiento.fecha.slice(8, 10))],
+    creado: movimiento.fecha,
+    activo: true,
+  })
+  await db.ocurrencias.add({ recurrenteId, fecha: movimiento.fecha, estado: 'registrada', movimientoId: movimiento.id })
+}
+
+/** Los movimientos que ya están atados a algo (un recurrente, un pago de deuda, un aporte o un trabajo por días). */
+export async function idsVinculados(): Promise<Set<number>> {
+  const [ocurrencias, pagos, aportes, jornadas] = await Promise.all([
+    db.ocurrencias.toArray(),
+    db.pagosDeuda.toArray(),
+    db.aportes.toArray(),
+    db.jornadas.toArray(),
+  ])
+  const ids = new Set<number>()
+  for (const x of [...ocurrencias, ...pagos, ...aportes, ...jornadas]) if (x.movimientoId !== undefined) ids.add(x.movimientoId)
+  return ids
+}
+
+/**
+ * Los movimientos de un mes que se pueden volver fijos (que se repiten cada mes): los registrados a mano, que no son
+ * programados ni están atados a un recurrente, pago, aporte o trabajo por días.
+ */
+export async function candidatosAFijos(mes: string): Promise<Movimiento[]> {
+  const [movimientos, vinculados] = await Promise.all([
+    db.movimientos.where('fecha').between(`${mes}-01`, `${mes}-32`).toArray(),
+    idsVinculados(),
+  ])
+  return movimientos
+    .filter((m) => m.programado === undefined && !vinculados.has(m.id!))
+    .sort((a, b) => a.tipo.localeCompare(b.tipo) || a.fecha.localeCompare(b.fecha) || a.id! - b.id!)
+}
+
+/**
+ * Vuelve fijos los movimientos elegidos: cada uno se repetirá cada mes, el mismo día, y aparecerá ya en los meses
+ * siguientes. Devuelve cuántos se volvieron fijos (se saltan los que ya no se pueden: borrados, programados o atados).
+ */
+export async function repetirMovimientos(ids: number[]): Promise<number> {
+  return db.transaction('rw', [db.movimientos, db.recurrentes, db.ocurrencias, db.categorias, db.pagosDeuda, db.aportes, db.jornadas], async () => {
+    const vinculados = await idsVinculados()
+    let hechos = 0
+    for (const id of ids) {
+      const movimiento = await db.movimientos.get(id)
+      if (!movimiento || movimiento.programado !== undefined || vinculados.has(id)) continue
+      await volverRecurrente({ ...movimiento, id })
+      hechos++
+    }
+    return hechos
   })
 }
 

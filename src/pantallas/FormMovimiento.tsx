@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento, type Tipo } from '../db'
 import { hoy } from '../fechas'
 import { omitirProgramado } from '../programados'
-import { crearMovimientoRecurrente } from '../recurrentes'
+import { crearMovimientoRecurrente, idsVinculados, repetirMovimientos } from '../recurrentes'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
 
@@ -27,6 +27,12 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
   const categorias = useLiveQuery(() => db.categorias.where('tipo').equals(tipo).toArray(), [tipo])
   // Las categorías ocultas no se ofrecen, salvo la que ya usa este movimiento.
   const visibles = (categorias ?? []).filter((c) => !c.oculta || c.id === movimiento?.categoriaId)
+  // Un movimiento que ya existe se puede volver fijo, salvo si ya es programado o está atado a un recurrente, pago o aporte.
+  const atado = useLiveQuery(
+    async () => (movimiento?.id !== undefined ? (await idsVinculados()).has(movimiento.id) : false),
+    [movimiento?.id],
+  )
+  const puedeRepetir = !editando || (movimiento.programado === undefined && atado === false)
 
   function cambiarTipo(nuevo: Tipo) {
     if (nuevo === tipo) return
@@ -39,8 +45,10 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
     if (categoriaId === null) return setError('Elige una categoría.')
     if (!fecha) return setError('Elige una fecha.')
     const datos = { tipo, monto, categoriaId, fecha, nota: nota.trim() }
-    if (editando) await db.movimientos.update(movimiento.id!, datos)
-    else if (repetir) await crearMovimientoRecurrente(datos)
+    if (editando) {
+      await db.movimientos.update(movimiento.id!, datos)
+      if (repetir && puedeRepetir) await repetirMovimientos([movimiento.id!])
+    } else if (repetir) await crearMovimientoRecurrente(datos)
     else await db.movimientos.add(datos)
     alCerrar()
   }
@@ -106,7 +114,7 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
         <input type="text" maxLength={80} value={nota} onChange={(e) => setNota(e.target.value)} />
       </label>
 
-      {!editando && (
+      {puedeRepetir && (
         <label className="casilla">
           <input type="checkbox" checked={repetir} onChange={(e) => setRepetir(e.target.checked)} />
           <span>
