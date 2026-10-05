@@ -101,18 +101,23 @@ export default function PorPagar() {
 
   const fila = (m: Movimiento, color: 'gasto' | 'ingreso') => (
     <li key={m.id}>
-      <button
-        className="fila-por-pagar fila-toca"
-        onClick={() => void abrir(m)}
-        aria-label={`${color === 'gasto' ? 'Pagar' : 'Registrar'} ${m.nota || categoria(m.categoriaId)?.nombre || 'movimiento'}`}
-      >
-        <span className="icono-cat" aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
-        <span className="texto-mov">
-          <span>{m.nota || categoria(m.categoriaId)?.nombre || 'Movimiento'}</span>
-          <small>{cuando(m.fecha)} · {etiquetaDe(m)}</small>
-        </span>
-        <strong className={color}>{pesos(m.monto)}</strong>
-      </button>
+      <div className="fila-por-pagar con-boton">
+        <button className="fila-toca" onClick={() => void abrir(m)}>
+          <span className="icono-cat" aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
+          <span className="texto-mov">
+            <span>{m.nota || categoria(m.categoriaId)?.nombre || 'Movimiento'}</span>
+            <small>{cuando(m.fecha)} · {etiquetaDe(m)}</small>
+          </span>
+          <strong className={color}>{pesos(m.monto)}</strong>
+        </button>
+        <button
+          className="boton-chico"
+          onClick={() => void abrir(m)}
+          aria-label={`${color === 'gasto' ? 'Pagar' : 'Registrar'} ${m.nota || categoria(m.categoriaId)?.nombre || 'movimiento'}`}
+        >
+          {color === 'gasto' ? 'Pagar ahora' : 'Registrar ingreso'}
+        </button>
+      </div>
     </li>
   )
 
@@ -171,8 +176,8 @@ export default function PorPagar() {
           <ul className="tarjeta lista por-pagar">{porPagar.map((m) => fila(m, 'gasto'))}</ul>
         )}
         <p className="pequeno nota-pie">
-          Toca un pago para registrarlo ya, aunque todavía no sea su día. Aquí aparece todo gasto programado (deudas, ahorros
-          y gastos fijos) o con fecha futura, hasta que lo pagas.
+          Toca «Pagar ahora» en cualquier gasto para registrar su pago hoy, aunque todavía no sea su día. Aquí aparece todo
+          gasto programado (deudas, ahorros y gastos fijos) o con fecha futura, hasta que lo pagas.
         </p>
       </section>
 
