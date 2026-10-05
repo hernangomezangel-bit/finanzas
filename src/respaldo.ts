@@ -10,6 +10,7 @@ import {
   type Movimiento,
   type Ocurrencia,
   type PagoDeuda,
+  type Programado,
   type ProgramaAhorro,
   type Recurrente,
   type Tipo,
@@ -26,8 +27,9 @@ import type { TipoTasa } from './plan'
  * Versión 5: agrega los trabajos por días con meta diaria y sus jornadas.
  * Versión 6: las deudas guardan desde cuándo se proponen sus cuotas, y los pagos pueden ser cuotas omitidas.
  * Versión 7: las metas de ahorro pueden ser un ahorro programado (cuota fija), y los aportes pueden ser cuotas omitidas.
+ * Versión 8: los gastos pueden ser cuotas programadas de deudas o ahorros que la app creó sola.
  */
-export const VERSION_RESPALDO = 7
+export const VERSION_RESPALDO = 8
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -355,7 +357,25 @@ function validarMovimiento(m: unknown, i: number, categoriasPorId: Map<number, C
   if (!esEntero(m.categoriaId) || !categoriasPorId.has(m.categoriaId)) return falla(`El movimiento ${i + 1} usa una categoría que no existe en la copia.`)
   if (!esFechaValida(m.fecha)) return falla(`El movimiento ${i + 1} tiene una fecha no válida.`)
   if (typeof m.nota !== 'string' || m.nota.length > 200) return falla(`El movimiento ${i + 1} tiene una nota no válida.`)
-  return { id: m.id, tipo: m.tipo, monto: m.monto, categoriaId: m.categoriaId, fecha: m.fecha, nota: m.nota }
+  const programado = m.programado === undefined ? undefined : validarProgramado(m.programado, i)
+  return {
+    id: m.id,
+    tipo: m.tipo,
+    monto: m.monto,
+    categoriaId: m.categoriaId,
+    fecha: m.fecha,
+    nota: m.nota,
+    ...(programado ? { programado } : {}),
+  }
+}
+
+function validarProgramado(p: unknown, i: number): Programado {
+  if (!esObjeto(p)) return falla(`El gasto programado ${i + 1} no tiene el formato esperado.`)
+  if (p.origen !== 'deuda' && p.origen !== 'ahorro') return falla(`El gasto programado ${i + 1} tiene un origen no válido.`)
+  if (!esEntero(p.refId) || p.refId <= 0) return falla(`El gasto programado ${i + 1} tiene un dato no válido.`)
+  if (!esFechaValida(p.fechaCuota)) return falla(`El gasto programado ${i + 1} tiene una fecha de cuota no válida.`)
+  if (!esEntero(p.montoPlan) || p.montoPlan <= 0) return falla(`El gasto programado ${i + 1} tiene un monto no válido.`)
+  return { origen: p.origen, refId: p.refId, fechaCuota: p.fechaCuota, montoPlan: p.montoPlan }
 }
 
 function sinRepetidos(ids: number[], que: string) {
@@ -438,12 +458,19 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   )
   sinRepetidos(jornadas.map((j) => j.id!), 'identificadores de jornada')
 
+  // Un gasto programado cuya deuda o meta no está en la copia ya no tiene de dónde venir: queda como un gasto normal.
+  const deudasIds = new Set(deudas.map((d) => d.id!))
+  const metasIds = new Set(metas.map((m) => m.id!))
+  const movimientosFinales = movimientos.map(({ programado, ...resto }): Movimiento =>
+    programado && (programado.origen === 'deuda' ? deudasIds : metasIds).has(programado.refId) ? { ...resto, programado } : resto,
+  )
+
   return {
     app: 'mis-finanzas',
     version: datos.version,
     exportadoEn: datos.exportadoEn,
     categorias,
-    movimientos,
+    movimientos: movimientosFinales,
     metas,
     aportes,
     deudas,

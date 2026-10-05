@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento, type Tipo } from '../db'
 import { hoy } from '../fechas'
+import { omitirProgramado } from '../programados'
 import { crearMovimientoRecurrente } from '../recurrentes'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
@@ -45,13 +46,25 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
   }
 
   async function eliminar() {
-    if (!window.confirm('¿Eliminar este movimiento?')) return
-    await db.movimientos.delete(movimiento!.id!)
+    const programado = movimiento!.programado !== undefined
+    const aviso = programado
+      ? 'Este pago está programado. Si lo eliminas, se omite esta cuota y no volverá a aparecer. ¿Eliminarlo?'
+      : '¿Eliminar este movimiento?'
+    if (!window.confirm(aviso)) return
+    // Un gasto programado se quita omitiendo su cuota; si no, la app lo volvería a crear.
+    if (programado) await omitirProgramado(movimiento!)
+    else await db.movimientos.delete(movimiento!.id!)
     alCerrar()
   }
 
   return (
     <Hoja titulo={editando ? 'Editar movimiento' : 'Nuevo movimiento'} alCerrar={alCerrar}>
+      {movimiento?.programado && (
+        <p className="ayuda">
+          Programado: la app lo creó sola. Puedes cambiar el monto. El día del pago, confírmalo en «Por registrar» para que
+          baje el saldo de tu deuda o sume a tu ahorro.
+        </p>
+      )}
       <div className="selector" role="group" aria-label="Tipo de movimiento">
         <button className={tipo === 'gasto' ? 'sel gasto' : ''} onClick={() => cambiarTipo('gasto')}>
           Gasto

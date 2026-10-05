@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Ajuste } from './db'
 import { calcularPlan, fechaCuota, saldoActual } from './deudas'
 import { hoy } from './fechas'
+import { claveProgramado } from './programadosPuro'
 import { cuotasAbiertas, vencimientosAbiertos } from './recurrencia'
 
 /** Algo que todavía no está registrado como movimiento pero ya es seguro que va a pasar en el mes. */
@@ -69,7 +70,7 @@ export async function leerCompromisos(mes: string): Promise<Compromisos> {
       const fecha = fechaCuota(deuda, propios, i + 1)
       if (!fecha || fecha > hasta) break
       if (fecha >= desde && !resueltas.has(fecha)) {
-        items.push({ clave: `d|${deuda.id}|${fecha}`, tipo: 'deuda', direccion: 'pagar', fecha, nombre: `Pago de ${deuda.nombre}`, icono: deuda.icono, monto: pago })
+        items.push({ clave: claveProgramado('deuda', deuda.id!, fecha), tipo: 'deuda', direccion: 'pagar', fecha, nombre: `Pago de ${deuda.nombre}`, icono: deuda.icono, monto: pago })
       }
     }
   }
@@ -79,7 +80,7 @@ export async function leerCompromisos(mes: string): Promise<Compromisos> {
     if (!meta.programa || meta.archivada || !meta.fechaMeta) continue
     const resueltas = new Set(aportes.flatMap((a) => (a.metaId === meta.id && a.fechaCuota ? [a.fechaCuota] : [])))
     for (const fecha of cuotasAbiertas(meta.programa, meta.fechaMeta, resueltas, hoyTexto, desde, hasta)) {
-      items.push({ clave: `a|${meta.id}|${fecha}`, tipo: 'ahorro', direccion: 'pagar', fecha, nombre: `Ahorro: ${meta.nombre}`, icono: meta.icono, monto: meta.programa.cuota })
+      items.push({ clave: claveProgramado('ahorro', meta.id!, fecha), tipo: 'ahorro', direccion: 'pagar', fecha, nombre: `Ahorro: ${meta.nombre}`, icono: meta.icono, monto: meta.programa.cuota })
     }
   }
 

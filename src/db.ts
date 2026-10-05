@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { hoy } from './fechas'
 import type { Estrategia, TipoTasa } from './plan'
+import type { OrigenProgramado } from './programadosPuro'
 import type { Frecuencia } from './recurrencia'
 
 export type Tipo = 'gasto' | 'ingreso'
@@ -26,6 +27,19 @@ export interface Movimiento {
   /** Fecha local en formato AAAA-MM-DD. */
   fecha: string
   nota: string
+  /** Si viene, es el gasto de una cuota de deuda o de ahorro que la app creó sola y que aún no se confirma. */
+  programado?: Programado
+}
+
+/** De qué cuota viene un gasto programado, para confirmarlo, actualizarlo o quitarlo cuando cambie algo. */
+export interface Programado {
+  origen: OrigenProgramado
+  /** Id de la deuda o de la meta de ahorro. */
+  refId: number
+  /** Fecha de la cuota que representa (AAAA-MM-DD). */
+  fechaCuota: string
+  /** El monto que tenía el plan al crearlo o actualizarlo; si el monto del gasto es distinto, la persona lo editó. */
+  montoPlan: number
 }
 
 /** Movimiento que se repite cada mes (salario, arriendo, servicios). La app lo propone; la persona confirma. */

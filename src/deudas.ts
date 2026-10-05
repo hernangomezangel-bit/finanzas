@@ -1,6 +1,7 @@
 import { CATEGORIA_DEUDAS, db, type Ajuste, type Deuda, type PagoDeuda } from './db'
 import { diaSiguiente, fechaDeCuota, hoy } from './fechas'
 import { simular, tasaMensual, type DeudaPlan, type Estrategia, type ResultadoPlan } from './plan'
+import { buscarProgramado } from './programadosBase'
 import { claveOcurrencia, pendientes } from './recurrencia'
 
 /** Lo que se debe hoy: el saldo inicial menos lo que los pagos han bajado de capital. */
@@ -106,31 +107,39 @@ export async function leerCuotasPropuestas(): Promise<CuotaPropuesta[]> {
   const elegida = ajustes.find((a): a is Extract<Ajuste, { clave: 'deudaEstrategia' }> => a.clave === 'deudaEstrategia')?.valor
   const { resultado } = calcularPlan(deudas, pagos, extra, elegida)
   const delPlan = new Map((resultado.plan[0]?.lineas ?? []).map((l) => [l.deudaId, l.pago]))
+  // Si la cuota ya tiene su gasto programado, el monto es el de ese gasto (por si lo editaste en Presupuesto).
+  const programados = new Map(
+    (await db.movimientos.filter((m) => m.programado?.origen === 'deuda').toArray()).map((m) => [
+      `${m.programado!.refId}|${m.programado!.fechaCuota}`,
+      m.monto,
+    ]),
+  )
 
   return deudas.flatMap((deuda) => {
     const propios = pagos.filter((p) => p.deudaId === deuda.id)
     const saldo = saldoActual(deuda, propios)
-    const monto = delPlan.get(deuda.id!) ?? deuda.pagoMinimo
-    return cuotasPendientes(deuda, propios).map((fecha) => ({
-      deuda,
-      fecha,
-      monto,
-      extra: Math.max(0, monto - deuda.pagoMinimo),
-      saldo,
-    }))
+    return cuotasPendientes(deuda, propios).map((fecha) => {
+      const monto = programados.get(`${deuda.id}|${fecha}`) ?? delPlan.get(deuda.id!) ?? deuda.pagoMinimo
+      return { deuda, fecha, monto, extra: Math.max(0, monto - deuda.pagoMinimo), saldo }
+    })
   })
 }
 
 /** Deja pasar una cuota sin registrarla (por ejemplo, ya se pagó por otro lado): no se vuelve a proponer. */
 export async function omitirCuota(deuda: Deuda, fechaCuota: string): Promise<void> {
-  await db.pagosDeuda.add({
-    deudaId: deuda.id!,
-    monto: 0,
-    interes: 0,
-    aCapital: 0,
-    fecha: hoy(),
-    fechaCuota,
-    omitida: true,
+  await db.transaction('rw', db.movimientos, db.pagosDeuda, async () => {
+    await db.pagosDeuda.add({
+      deudaId: deuda.id!,
+      monto: 0,
+      interes: 0,
+      aCapital: 0,
+      fecha: hoy(),
+      fechaCuota,
+      omitida: true,
+    })
+    // El gasto programado de esa cuota ya no corresponde.
+    const programado = await buscarProgramado('deuda', deuda.id!, fechaCuota)
+    if (programado) await db.movimientos.delete(programado.id!)
   })
 }
 
@@ -160,15 +169,27 @@ export async function registrarPago(deuda: Deuda, datos: DatosPago): Promise<voi
     // Un pago suelto cubre la cuota vencida más vieja, para que no se vuelva a proponer esa misma.
     const fechaCuota = datos.fechaCuota ?? cuotasPendientes(deuda, pagos)[0]
 
+    // La app ya creó el gasto de esa cuota (programado): se confirma ese mismo, sin crear uno segundo.
+    const programado = fechaCuota ? await buscarProgramado('deuda', deuda.id!, fechaCuota) : undefined
+    const nota = `Pago de ${deuda.nombre}`.slice(0, 200)
+
     let movimientoId: number | undefined
     if (datos.comoGasto) {
-      movimientoId = await db.movimientos.add({
-        tipo: 'gasto',
-        monto,
-        categoriaId: await categoriaDeudasId(),
-        fecha: datos.fecha,
-        nota: `Pago de ${deuda.nombre}`.slice(0, 200),
-      })
+      if (programado) {
+        await db.movimientos.update(programado.id!, { monto, fecha: datos.fecha, nota, programado: undefined })
+        movimientoId = programado.id
+      } else {
+        movimientoId = await db.movimientos.add({
+          tipo: 'gasto',
+          monto,
+          categoriaId: await categoriaDeudasId(),
+          fecha: datos.fecha,
+          nota,
+        })
+      }
+    } else if (programado) {
+      // Si el gasto ya se registró por otro lado, el programado sobra.
+      await db.movimientos.delete(programado.id!)
     }
     await db.pagosDeuda.add({
       deudaId: deuda.id!,
@@ -191,9 +212,11 @@ export async function eliminarPago(pago: PagoDeuda): Promise<void> {
 
 /** Borra la deuda y su historial de pagos. Los gastos que ya contaron en el Presupuesto se conservan. */
 export async function eliminarDeuda(deudaId: number): Promise<void> {
-  await db.transaction('rw', db.deudas, db.pagosDeuda, async () => {
+  await db.transaction('rw', db.deudas, db.pagosDeuda, db.movimientos, async () => {
     await db.pagosDeuda.where('deudaId').equals(deudaId).delete()
     await db.deudas.delete(deudaId)
+    // Los gastos programados que aún no se confirmaron dejan de tener sentido; los ya pagados se conservan.
+    await db.movimientos.filter((m) => m.programado?.origen === 'deuda' && m.programado.refId === deudaId).delete()
   })
 }
 

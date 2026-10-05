@@ -1,5 +1,6 @@
 import { CATEGORIA_AHORRO, db, type Aporte, type Meta, type ProgramaAhorro } from './db'
 import { hoy, numeroDeDia } from './fechas'
+import { buscarProgramado } from './programadosBase'
 import { cuotasPendientes, fechasCuotas } from './recurrencia'
 
 export interface Punto {
@@ -59,6 +60,17 @@ export async function guardarAporte(datos: DatosAporte, existente?: Aporte): Pro
     const nota = `Aporte a ${meta?.nombre ?? 'meta'}${datos.nota ? `: ${datos.nota}` : ''}`.slice(0, 200)
     const gastoActual = existente?.movimientoId ? await db.movimientos.get(existente.movimientoId) : undefined
 
+    // Un aporte nuevo que alcanza para una cuota vencida la cubre (la más vieja), para que no se proponga otra vez.
+    // Uno menor que la cuota se toma como un aporte extra.
+    let fechaCuota = datos.fechaCuota ?? existente?.fechaCuota
+    if (!existente && fechaCuota === undefined && meta?.programa && datos.monto >= meta.programa.cuota) {
+      const delMeta = await db.aportes.where('metaId').equals(meta.id!).toArray()
+      fechaCuota = cuotasPendientesAhorro(meta, delMeta)[0]
+    }
+
+    // La app ya creó el gasto de esa cuota (programado): se confirma ese mismo, sin crear uno segundo.
+    const programado = !existente && fechaCuota ? await buscarProgramado('ahorro', datos.metaId, fechaCuota) : undefined
+
     let movimientoId: number | undefined
     if (datos.comoGasto) {
       const gasto = { tipo: 'gasto' as const, monto: datos.monto, fecha: datos.fecha, nota }
@@ -66,19 +78,16 @@ export async function guardarAporte(datos: DatosAporte, existente?: Aporte): Pro
         // Se respeta la categoría si la persona la cambió en el Presupuesto.
         await db.movimientos.update(gastoActual.id!, gasto)
         movimientoId = gastoActual.id
+      } else if (programado) {
+        await db.movimientos.update(programado.id!, { ...gasto, programado: undefined })
+        movimientoId = programado.id
       } else {
         movimientoId = await db.movimientos.add({ ...gasto, categoriaId: await categoriaAhorroId() })
       }
-    } else if (gastoActual) {
-      await db.movimientos.delete(gastoActual.id!)
-    }
-
-    // Un aporte nuevo que alcanza para una cuota vencida la cubre (la más vieja), para que no se proponga otra vez.
-    // Uno menor que la cuota se toma como un aporte extra.
-    let fechaCuota = datos.fechaCuota ?? existente?.fechaCuota
-    if (!existente && fechaCuota === undefined && meta?.programa && datos.monto >= meta.programa.cuota) {
-      const delMeta = await db.aportes.where('metaId').equals(meta.id!).toArray()
-      fechaCuota = cuotasPendientesAhorro(meta, delMeta)[0]
+    } else {
+      if (gastoActual) await db.movimientos.delete(gastoActual.id!)
+      // Si el gasto ya se registró por otro lado, el programado sobra.
+      if (programado) await db.movimientos.delete(programado.id!)
     }
 
     const registro = {
@@ -103,7 +112,12 @@ export async function eliminarAporte(aporte: Aporte): Promise<void> {
 
 /** Deja pasar una cuota sin registrarla: no suma ahorro, no crea gasto y no se vuelve a proponer. */
 export async function omitirCuotaAhorro(meta: Meta, fechaCuota: string): Promise<void> {
-  await db.aportes.add({ metaId: meta.id!, monto: 0, fecha: hoy(), nota: '', fechaCuota, omitida: true })
+  await db.transaction('rw', db.movimientos, db.aportes, async () => {
+    await db.aportes.add({ metaId: meta.id!, monto: 0, fecha: hoy(), nota: '', fechaCuota, omitida: true })
+    // El gasto programado de esa cuota ya no corresponde.
+    const programado = await buscarProgramado('ahorro', meta.id!, fechaCuota)
+    if (programado) await db.movimientos.delete(programado.id!)
+  })
 }
 
 export interface CuotaAhorro {
@@ -115,13 +129,19 @@ export interface CuotaAhorro {
 
 /** Las cuotas vencidas de todos los ahorros programados, con su monto fijo. */
 export async function leerCuotasAhorro(): Promise<CuotaAhorro[]> {
-  const [metas, aportes] = await Promise.all([db.metas.toArray(), db.aportes.toArray()])
+  const [metas, aportes, programados] = await Promise.all([
+    db.metas.toArray(),
+    db.aportes.toArray(),
+    db.movimientos.filter((m) => m.programado?.origen === 'ahorro').toArray(),
+  ])
+  // Si la cuota ya tiene su gasto programado, el monto es el de ese gasto (por si lo editaste en Presupuesto).
+  const montos = new Map(programados.map((m) => [`${m.programado!.refId}|${m.programado!.fechaCuota}`, m.monto]))
   return metas.flatMap((meta) =>
     meta.programa
       ? cuotasPendientesAhorro(meta, aportes.filter((a) => a.metaId === meta.id)).map((fecha) => ({
           meta,
           fecha,
-          monto: meta.programa!.cuota,
+          monto: montos.get(`${meta.id}|${fecha}`) ?? meta.programa!.cuota,
         }))
       : [],
   )
@@ -161,8 +181,10 @@ export function progresoCuotas(meta: Meta, aportes: Aporte[]): { hechas: number;
 
 /** Borra la meta y sus aportes. Los gastos que ya contaron en el Presupuesto se conservan. */
 export async function eliminarMeta(metaId: number): Promise<void> {
-  await db.transaction('rw', db.metas, db.aportes, async () => {
+  await db.transaction('rw', db.metas, db.aportes, db.movimientos, async () => {
     await db.aportes.where('metaId').equals(metaId).delete()
     await db.metas.delete(metaId)
+    // Los gastos programados que aún no se confirmaron dejan de tener sentido; los ya pagados se conservan.
+    await db.movimientos.filter((m) => m.programado?.origen === 'ahorro' && m.programado.refId === metaId).delete()
   })
 }
