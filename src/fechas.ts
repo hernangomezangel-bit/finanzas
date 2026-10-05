@@ -60,6 +60,14 @@ export function fechaCorta(fecha: string): string {
   return aFecha(fecha).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+/** Día de la semana, día y mes en corto: «Lun, 5 oct». */
+export function fechaDia(fecha: string): string {
+  const texto = aFecha(fecha)
+    .toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace(/\./g, '')
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
 export function nombreMes(mes: string): string {
   const texto = aFecha(mes).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
   return texto.charAt(0).toUpperCase() + texto.slice(1)

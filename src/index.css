@@ -434,3 +434,43 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 
 /* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
 .lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }
+
+/* ---------- Lista de gastos o ingresos del mes ---------- */
+.bloque-mov {
+  background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;
+  margin-bottom: 16px; overflow: hidden;
+}
+.bloque-cabecera {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--borde);
+}
+.bloque-cabecera h3 { margin: 0; font-size: 1.02rem; display: flex; align-items: center; gap: 8px; }
+.bloque-cabecera strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.contador {
+  min-width: 24px; padding: 1px 8px; border-radius: 999px; text-align: center;
+  background: var(--fondo); border: 1px solid var(--borde); color: var(--suave); font-size: 0.75rem; font-weight: 600;
+}
+.bloque-mov ul { list-style: none; margin: 0; padding: 0; }
+.bloque-mov li + li { border-top: 1px solid var(--borde); }
+.fila-mov {
+  width: 100%; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.fila-mov:active { background: var(--fondo); }
+.burbuja {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-size: 1.25rem;
+}
+.burbuja.gasto { background: color-mix(in srgb, #dc2626 12%, var(--tarjeta)); }
+.burbuja.ingreso { background: color-mix(in srgb, #16a34a 14%, var(--tarjeta)); }
+.datos-mov { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.nombre-mov { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.datos-mov small { color: var(--suave); font-size: 0.8rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monto-mov { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pildora {
+  margin-top: 2px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+  color: #92400e; background: #fef3c7;
+}
+@media (prefers-color-scheme: dark) {
+  .pildora { color: #fcd34d; background: color-mix(in srgb, #f59e0b 22%, var(--tarjeta)); }
+}
+.fila-mov.pendiente .burbuja, .fila-mov.pendiente .nombre-mov, .fila-mov.pendiente .monto-mov { opacity: 0.8; }

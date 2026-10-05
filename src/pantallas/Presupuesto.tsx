@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
-import { fechaCorta, hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import { hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import { estaPendiente } from '../programadosPuro'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
+import ListaMovimientos from '../componentes/ListaMovimientos'
 import PendientesJornadas from '../componentes/PendientesJornadas'
 import PorRegistrar from '../componentes/PorRegistrar'
 import RepetirFijos from '../componentes/RepetirFijos'
@@ -62,9 +63,6 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
       valor,
       color: COLORES[i % COLORES.length],
     }))
-
-  const dias = new Map<string, Movimiento[]>()
-  for (const m of movimientos) dias.set(m.fecha, [...(dias.get(m.fecha) ?? []), m])
 
   // Los gastos incluyen lo que la app programó sola (cuotas de deudas y ahorros, gastos e ingresos fijos) y lo que
   // registraste con fecha futura. Eso cuenta en el mes, pero todavía no está pagado ni recibido: se muestra aparte.
@@ -177,41 +175,22 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
           <p className="pequeno">Toca el botón + para registrar el primero.</p>
         </div>
       ) : (
-        [...dias].map(([fecha, lista]) => (
-          <section key={fecha} className="dia">
-            <h3>{nombreDia(fecha)}</h3>
-            <ul className="tarjeta lista">
-              {lista.map((m) => {
-                const cat = porId.get(m.categoriaId)
-                return (
-                  <li key={m.id} className={estaPendiente(m, hoyTexto) ? 'pendiente' : undefined}>
-                    <button onClick={() => setFormulario({ movimiento: m })}>
-                      <span className="icono-cat" aria-hidden="true">{cat?.icono ?? '🧾'}</span>
-                      <span className="texto-mov">
-                        <span>{cat?.nombre ?? 'Sin categoría'}</span>
-                        {m.nota && <small>{m.nota}</small>}
-                        {m.programado ? (
-                          <small className="programado">
-                            {m.fecha > hoyTexto
-                              ? `Programado · ${m.tipo === 'gasto' ? 'por pagar' : 'por recibir'}`
-                              : 'Programado · confírmalo en «Por registrar»'}
-                          </small>
-                        ) : (
-                          m.fecha > hoyTexto && (
-                            <small className="programado">{m.tipo === 'gasto' ? 'Por pagar' : 'Por recibir'} el {fechaCorta(m.fecha)}</small>
-                          )
-                        )}
-                      </span>
-                      <strong className={m.tipo}>
-                        {m.tipo === 'gasto' ? '−' : '+'}{pesos(m.monto)}
-                      </strong>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        ))
+        <>
+          <ListaMovimientos
+            tipo="gasto"
+            movimientos={movimientos.filter((m) => m.tipo === 'gasto')}
+            categorias={porId}
+            hoy={hoyTexto}
+            alAbrir={(movimiento) => setFormulario({ movimiento })}
+          />
+          <ListaMovimientos
+            tipo="ingreso"
+            movimientos={movimientos.filter((m) => m.tipo === 'ingreso')}
+            categorias={porId}
+            hoy={hoyTexto}
+            alAbrir={(movimiento) => setFormulario({ movimiento })}
+          />
+        </>
       )}
 
       <button className="fab" onClick={() => setFormulario({})} aria-label="Agregar movimiento">+</button>
