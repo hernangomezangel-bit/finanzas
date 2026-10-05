@@ -382,3 +382,8 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .lista-pagados .nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lista-pagados .nombre small { font-size: 0.78rem; color: var(--suave); }
 .texto-mov small.programado { color: var(--acento); font-weight: 600; white-space: normal; }
+
+/* ---------- Casilla que se llenó sola ---------- */
+.monto-caja.calculado input { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 10%, var(--fondo)); }
+.ayuda.automatico { color: var(--acento); font-weight: 600; }
+.monto-caja .unidad { font-size: 1rem; color: var(--suave); }
