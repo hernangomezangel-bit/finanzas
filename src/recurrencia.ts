@@ -103,11 +103,43 @@ export function fechasCuotas(p: ProgramaCuotas, hasta: string, desde: string = p
 const VENTANA_CUOTAS: Record<Frecuencia, number> = { diaria: 6, semanal: 34, mensual: VENTANA_DIAS }
 
 /**
+ * Las cuotas sin atender entre `desde` y `hasta` (ambas incluidas), sin pasar del final del plan. Las vencidas solo
+ * cuentan dentro de la ventana de atraso; las futuras no tienen límite. `resueltas` son las fechas ya atendidas.
+ */
+export function cuotasAbiertas(
+  p: ProgramaCuotas,
+  fin: string | undefined,
+  resueltas: Set<string>,
+  hoy: string,
+  desde: string,
+  hasta: string,
+): string[] {
+  const piso = restarDias(hoy, VENTANA_CUOTAS[p.frecuencia])
+  const limite = fin !== undefined && fin < hasta ? fin : hasta
+  return fechasCuotas(p, limite, desde > piso ? desde : piso).filter((f) => !resueltas.has(f))
+}
+
+/**
  * Las cuotas que ya vencieron (hasta hoy y hasta el final del plan) y todavía no se registraron ni se omitieron.
  * `resueltas` son las fechas ya atendidas.
  */
 export function cuotasPendientes(p: ProgramaCuotas, fin: string | undefined, resueltas: Set<string>, hoy: string): string[] {
-  const piso = restarDias(hoy, VENTANA_CUOTAS[p.frecuencia])
-  const hasta = fin !== undefined && fin < hoy ? fin : hoy
-  return fechasCuotas(p, hasta, piso).filter((f) => !resueltas.has(f))
+  return cuotasAbiertas(p, fin, resueltas, hoy, p.inicio, hoy)
+}
+
+/**
+ * Los vencimientos mensuales de un movimiento recurrente entre `desde` y `hasta` que siguen sin atender: nunca
+ * antes de que se creara ni de la ventana de atraso. `resueltas` son las fechas ya registradas u omitidas.
+ */
+export function vencimientosAbiertos(
+  dias: number[],
+  creado: string,
+  resueltas: Set<string>,
+  hoy: string,
+  desde: string,
+  hasta: string,
+): string[] {
+  const piso = restarDias(hoy, VENTANA_DIAS)
+  const inicio = [creado, desde, piso].reduce((a, b) => (a > b ? a : b))
+  return fechasEntre(dias, inicio, hasta).filter((f) => !resueltas.has(f))
 }

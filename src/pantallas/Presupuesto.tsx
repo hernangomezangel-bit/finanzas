@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
-import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import { useCompromisos } from '../compromisos'
+import { fechaCorta, hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
 import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
@@ -27,8 +28,9 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   const categorias = useLiveQuery(() => db.categorias.toArray())
   const promedio = usePromedioVariable(mes)
   const trabajosVariables = useResumenesJornadas(mes)
+  const compromisos = useCompromisos(mes)
 
-  if (!movimientos || !categorias || !trabajosVariables) return null
+  if (!movimientos || !categorias || !trabajosVariables || !compromisos) return null
 
   const porId = new Map(categorias.map((c) => [c.id!, c]))
   const variableMes = movimientos.reduce(
@@ -63,9 +65,26 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   const dias = new Map<string, Movimiento[]>()
   for (const m of movimientos) dias.set(m.fecha, [...(dias.get(m.fecha) ?? []), m])
 
-  // El balance cuenta lo ya recibido y, de los trabajos por días, lo que se ganaría cumpliendo la meta.
-  const balance = ingresos + proyectadoVariables - gastos
+  // Lo que falta por pagar o recibir en el mes (cuotas de deudas y ahorros, y recurrentes): ya cuenta en el balance
+  // aunque todavía no llegue su día, para ver cuánto dinero queda libre de verdad.
+  const { porPagar, porRecibir } = compromisos
+  const pagos = compromisos.items.filter((c) => c.direccion === 'pagar')
+  const partesPorPagar = [
+    porPagar.deudas > 0 && `Deudas ${pesos(porPagar.deudas)}`,
+    porPagar.ahorros > 0 && `Ahorros ${pesos(porPagar.ahorros)}`,
+    porPagar.fijos > 0 && `Pagos fijos ${pesos(porPagar.fijos)}`,
+  ].filter(Boolean)
+
+  // El balance cuenta lo ya recibido, la proyección de los trabajos por días (si cumples la meta) y lo que falta por
+  // pagar y por recibir.
+  const balance = ingresos + proyectadoVariables + porRecibir - gastos - porPagar.total
   const balanceRegistrado = ingresosRegistrados - gastos
+  const hayProyeccion = recuadrosVariables.length > 0 || porPagar.total > 0 || porRecibir > 0
+  const notaBalance = [
+    recuadrosVariables.length > 0 && `la proyección de ${recuadrosVariables.map((t) => t.fuente.nombre).join(' y ')}`,
+    porPagar.total > 0 && 'lo que falta por pagar',
+    porRecibir > 0 && 'lo que falta por recibir',
+  ].filter(Boolean)
 
   return (
     <>
@@ -106,14 +125,55 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
             </small>
           </div>
         ))}
+        {porPagar.total > 0 && (
+          <div className="tarjeta dato ancho">
+            <span>Por pagar este mes</span>
+            <strong className="gasto">{pesos(porPagar.total)}</strong>
+            <small className="detalle-dato">{partesPorPagar.join(' · ')}</small>
+            <details className="detalle-compromisos">
+              <summary>Ver qué falta</summary>
+              <ul>
+                {pagos.map((c) => (
+                  <li key={c.clave}>
+                    <span aria-hidden="true">{c.icono}</span>
+                    <span className="nombre">
+                      {c.nombre}
+                      <small>{c.fecha === hoy() ? 'Hoy' : c.fecha < hoy() ? `Tocaba el ${fechaCorta(c.fecha)}` : fechaCorta(c.fecha)}</small>
+                    </span>
+                    <strong className="gasto">{pesos(c.monto)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
+        {porRecibir > 0 && (
+          <div className="tarjeta dato ancho">
+            <span>Por recibir este mes</span>
+            <strong className="ingreso">{pesos(porRecibir)}</strong>
+            <small className="detalle-dato">
+              {compromisos.items.filter((c) => c.direccion === 'recibir').map((c) => `${c.nombre} (${fechaCorta(c.fecha)})`).join(' · ')}
+            </small>
+          </div>
+        )}
         <div className="tarjeta dato ancho">
           <span>Balance del mes</span>
           <strong className={balance < 0 ? 'gasto' : 'ingreso'}>{pesos(balance)}</strong>
-          {recuadrosVariables.length > 0 && (
-            <small className="detalle-dato">Incluye la proyección de {recuadrosVariables.map((t) => t.fuente.nombre).join(' y ')}. Con lo ya registrado hasta hoy: {pesos(balanceRegistrado)}</small>
+          {hayProyeccion && (
+            <small className="detalle-dato">
+              Dinero libre del mes: incluye {notaBalance.join(', ')}. Con lo ya registrado hasta hoy: {pesos(balanceRegistrado)}
+            </small>
           )}
         </div>
       </div>
+
+      {compromisos.deudasSinDia.length > 0 && (
+        <p className="aviso-sin-dia">
+          ⚠️ {compromisos.deudasSinDia.join(', ')} no {compromisos.deudasSinDia.length === 1 ? 'tiene' : 'tienen'} día de
+          pago, así que {compromisos.deudasSinDia.length === 1 ? 'no se incluye' : 'no se incluyen'} en lo que falta por
+          pagar. Pon el día en Deudas → Editar deuda.
+        </p>
+      )}
 
       <ResumenJornadas mes={mes} resumenes={trabajosVariables} />
 
