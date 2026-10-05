@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento, type Tipo } from '../db'
-import { hoy } from '../fechas'
+import { hoy, nombreDia } from '../fechas'
 import { omitirProgramado } from '../programados'
-import { crearMovimientoRecurrente, idsVinculados, repetirMovimientos } from '../recurrentes'
+import { crearMovimientoConPatron, idsVinculados, volverFijo } from '../recurrentes'
+import { patronDe, textoRepeticion, type Repeticion } from '../repeticion'
+import Calendario from '../componentes/Calendario'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
 
@@ -20,8 +22,9 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
   const [monto, setMonto] = useState(movimiento?.monto ?? 0)
   const [categoriaId, setCategoriaId] = useState<number | null>(movimiento?.categoriaId ?? null)
   const [fecha, setFecha] = useState(movimiento?.fecha ?? fechaInicial(mesActual))
+  const [repeticion, setRepeticion] = useState<Repeticion>({ tipo: 'unica', dias: [] })
+  const [calendario, setCalendario] = useState(false)
   const [nota, setNota] = useState(movimiento?.nota ?? '')
-  const [repetir, setRepetir] = useState(false)
   const [error, setError] = useState('')
 
   const categorias = useLiveQuery(() => db.categorias.where('tipo').equals(tipo).toArray(), [tipo])
@@ -45,10 +48,11 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
     if (categoriaId === null) return setError('Elige una categoría.')
     if (!fecha) return setError('Elige una fecha.')
     const datos = { tipo, monto, categoriaId, fecha, nota: nota.trim() }
+    const patron = puedeRepetir ? patronDe(repeticion) : null
     if (editando) {
       await db.movimientos.update(movimiento.id!, datos)
-      if (repetir && puedeRepetir) await repetirMovimientos([movimiento.id!])
-    } else if (repetir) await crearMovimientoRecurrente(datos)
+      if (patron) await volverFijo(movimiento.id!, patron)
+    } else if (patron) await crearMovimientoConPatron(datos, patron)
     else await db.movimientos.add(datos)
     alCerrar()
   }
@@ -99,38 +103,45 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
         </div>
       </div>
 
-      <label className="campo">
-        Fecha
-        <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+      <div className="campo">
+        {repeticion.tipo === 'unica' ? 'Fecha' : 'Empieza el'}
+        <button className="boton-fecha" onClick={() => setCalendario(true)} aria-label="Elegir fecha">
+          <span aria-hidden="true">📅</span> {nombreDia(fecha)}
+        </button>
+        {repeticion.tipo !== 'unica' && <span className="repite">🔁 {textoRepeticion(repeticion)}</span>}
+        {puedeRepetir && repeticion.tipo === 'unica' && (
+          <small className="ayuda">Toca la fecha para elegir otro día o para que se repita (todos los días, cada semana, cada quincena o cada mes).</small>
+        )}
         {fecha > hoy() && (
           <small className="ayuda">
             La fecha todavía no llega: quedará como «{tipo === 'gasto' ? 'por pagar' : 'por recibir'}» hasta ese día.
           </small>
         )}
-      </label>
+      </div>
 
       <label className="campo">
         Nota (opcional)
         <input type="text" maxLength={80} value={nota} onChange={(e) => setNota(e.target.value)} />
       </label>
 
-      {puedeRepetir && (
-        <label className="casilla">
-          <input type="checkbox" checked={repetir} onChange={(e) => setRepetir(e.target.checked)} />
-          <span>
-            Repetir cada mes
-            <small>
-              Aparecerá en cada mes, el día {Number(fecha.slice(8, 10)) || '…'}, como «{tipo === 'gasto' ? 'por pagar' : 'por recibir'}»
-              hasta ese día. Lo confirmas con un toque.
-            </small>
-          </span>
-        </label>
-      )}
-
       {error && <p className="error" role="alert">{error}</p>}
 
       <button className="boton primario" onClick={guardar}>Guardar</button>
       {editando && <button className="boton peligro" onClick={eliminar}>Eliminar</button>}
+
+      {calendario && (
+        <Calendario
+          fecha={fecha}
+          repeticion={repeticion}
+          permiteRepetir={puedeRepetir}
+          alAplicar={(f, r) => {
+            setFecha(f)
+            setRepeticion(r)
+            setCalendario(false)
+          }}
+          alCerrar={() => setCalendario(false)}
+        />
+      )}
     </Hoja>
   )
 }

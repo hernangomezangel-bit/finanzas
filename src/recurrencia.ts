@@ -1,10 +1,19 @@
 // Cuándo le toca a cada movimiento recurrente. Código puro (sin pantalla ni base de datos),
 // así se puede probar solo. Las fechas son texto AAAA-MM-DD en la hora del teléfono.
 
-export interface Programa {
-  id: number
-  /** Días del mes en que se repite (1 a 31); uno para mensual, dos para quincenal. */
+/**
+ * Cómo se repite un movimiento fijo. Sin `frecuencia` es mensual, como eran todos al principio:
+ *  - mensual: `dias` son días del mes (1 a 31); uno es mensual y dos (uno por quincena) es quincenal.
+ *  - semanal: `dias` son días de la semana (0 = domingo … 6 = sábado); pueden ser varios.
+ *  - diaria: todos los días; `dias` va vacío.
+ */
+export interface PatronFijo {
+  frecuencia?: Frecuencia
   dias: number[]
+}
+
+export interface Programa extends PatronFijo {
+  id: number
   /** Desde cuándo cuenta: nunca se proponen fechas anteriores. */
   creado: string
   activo: boolean
@@ -54,16 +63,38 @@ export function fechasEntre(dias: number[], desde: string, hasta: string): strin
  * `resueltas` contiene claves `${id}|${fecha}` de lo ya atendido.
  */
 export function pendientes(programas: Programa[], resueltas: Set<string>, hoy: string): Vencimiento[] {
-  const piso = restarDias(hoy, VENTANA_DIAS)
   const lista: Vencimiento[] = []
   for (const p of programas) {
     if (!p.activo) continue
+    const piso = restarDias(hoy, ventanaDeFijo(p.frecuencia))
     const desde = p.creado > piso ? p.creado : piso
-    for (const fecha of fechasEntre(p.dias, desde, hoy)) {
+    for (const fecha of fechasPatron(p, desde, hoy)) {
       if (!resueltas.has(claveOcurrencia(p.id, fecha))) lista.push({ recurrenteId: p.id, fecha })
     }
   }
   return lista.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.recurrenteId - b.recurrenteId)
+}
+
+/**
+ * Todas las fechas en que cae un patrón entre `desde` y `hasta` (ambas incluidas), en orden y sin repetir:
+ * los días del mes (mensual o quincenal), los días de la semana elegidos, o todos los días.
+ */
+export function fechasPatron(patron: PatronFijo, desde: string, hasta: string): string[] {
+  if (desde > hasta) return []
+  if (patron.frecuencia === 'diaria') return fechasCuotas({ frecuencia: 'diaria', dia: 0, inicio: desde }, hasta)
+  if (patron.frecuencia === 'semanal') {
+    const fechas = new Set<string>()
+    for (const dia of patron.dias) {
+      for (const f of fechasCuotas({ frecuencia: 'semanal', dia, inicio: desde }, hasta)) fechas.add(f)
+    }
+    return [...fechas].sort()
+  }
+  return fechasEntre(patron.dias, desde, hasta)
+}
+
+/** Cuántos días hacia atrás se siguen proponiendo vencimientos atrasados; los diarios no pueden acumularse por meses. */
+export function ventanaDeFijo(frecuencia?: Frecuencia): number {
+  return frecuencia === 'diaria' ? 6 : frecuencia === 'semanal' ? 34 : VENTANA_DIAS
 }
 
 export function claveOcurrencia(recurrenteId: number, fecha: string): string {
@@ -132,14 +163,16 @@ export function cuotasPendientes(p: ProgramaCuotas, fin: string | undefined, res
  * antes de que se creara ni de la ventana de atraso. `resueltas` son las fechas ya registradas u omitidas.
  */
 export function vencimientosAbiertos(
-  dias: number[],
+  patron: PatronFijo | number[],
   creado: string,
   resueltas: Set<string>,
   hoy: string,
   desde: string,
   hasta: string,
 ): string[] {
-  const piso = restarDias(hoy, VENTANA_DIAS)
+  // Una lista de números sola es un patrón mensual (así se usaba antes).
+  const p: PatronFijo = Array.isArray(patron) ? { dias: patron } : patron
+  const piso = restarDias(hoy, ventanaDeFijo(p.frecuencia))
   const inicio = [creado, desde, piso].reduce((a, b) => (a > b ? a : b))
-  return fechasEntre(dias, inicio, hasta).filter((f) => !resueltas.has(f))
+  return fechasPatron(p, inicio, hasta).filter((f) => !resueltas.has(f))
 }

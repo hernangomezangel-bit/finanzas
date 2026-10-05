@@ -32,7 +32,7 @@ export default function Recurrentes() {
                 <span className="nombre">
                   {r.nombre}
                   <small className="ayuda">
-                    {textoDias(r.dias)}{r.activo ? '' : ' · en pausa'}
+                    {textoDias(r)}{r.activo ? '' : ' · en pausa'}
                   </small>
                 </span>
                 <strong className={r.tipo}>{pesos(r.monto)}</strong>

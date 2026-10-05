@@ -1,7 +1,8 @@
 import { db, type Movimiento, type Recurrente } from './db'
-import { claveOcurrencia, pendientes, type Vencimiento } from './recurrencia'
+import { claveOcurrencia, pendientes, type PatronFijo, type Vencimiento } from './recurrencia'
 import { hoy } from './fechas'
 import { buscarProgramado } from './programadosBase'
+import { esOcurrencia, textoPatron } from './repeticion'
 
 export interface PendienteConDatos extends Vencimiento {
   recurrente: Recurrente
@@ -18,7 +19,7 @@ export async function leerPendientes(): Promise<PendienteConDatos[]> {
   ])
   const resueltas = new Set(ocurrencias.map((o) => claveOcurrencia(o.recurrenteId, o.fecha)))
   const lista = pendientes(
-    recurrentes.map((r) => ({ id: r.id!, dias: r.dias, creado: r.creado, activo: r.activo })),
+    recurrentes.map((r) => ({ id: r.id!, frecuencia: r.frecuencia, dias: r.dias, creado: r.creado, activo: r.activo })),
     resueltas,
     hoy(),
   )
@@ -67,31 +68,63 @@ export async function omitirVencimiento(recurrente: Recurrente, fecha: string): 
   })
 }
 
-/**
- * Guarda un movimiento nuevo y lo deja programado para repetirse cada mes ese mismo día.
- * El vencimiento de hoy queda como ya registrado, para que no se proponga otra vez.
- */
-export async function crearMovimientoRecurrente(movimiento: Omit<Movimiento, 'id'>): Promise<void> {
-  await db.transaction('rw', db.movimientos, db.recurrentes, db.ocurrencias, db.categorias, async () => {
-    const movimientoId = await db.movimientos.add(movimiento)
-    await volverRecurrente({ ...movimiento, id: movimientoId })
-  })
-}
-
-/** Crea el recurrente que corresponde a un movimiento y deja ese movimiento como su vencimiento ya registrado. */
-async function volverRecurrente(movimiento: Movimiento & { id: number }): Promise<void> {
-  const categoria = await db.categorias.get(movimiento.categoriaId)
-  const recurrenteId = await db.recurrentes.add({
-    nombre: (movimiento.nota || categoria?.nombre || 'Recurrente').slice(0, 40),
+/** Los datos del recurrente que nace de un movimiento: empieza en la fecha del movimiento y se repite según el patrón. */
+function recurrenteDe(
+  movimiento: Omit<Movimiento, 'id'>,
+  patron: PatronFijo,
+  nombreCategoria: string | undefined,
+): Omit<Recurrente, 'id'> {
+  return {
+    nombre: (movimiento.nota || nombreCategoria || 'Recurrente').slice(0, 40),
     tipo: movimiento.tipo,
     monto: movimiento.monto,
     categoriaId: movimiento.categoriaId,
     nota: movimiento.nota,
-    dias: [Number(movimiento.fecha.slice(8, 10))],
+    // Mensual se guarda sin "frecuencia", como siempre; diaria y semanal sí la llevan.
+    ...(patron.frecuencia && patron.frecuencia !== 'mensual' ? { frecuencia: patron.frecuencia } : {}),
+    dias: patron.dias,
     creado: movimiento.fecha,
     activo: true,
+  }
+}
+
+/**
+ * Guarda un movimiento nuevo y lo deja repitiéndose según el patrón elegido (todos los días, cada semana, cada
+ * quincena o cada mes), desde su fecha. Si esa fecha ya llegó y es una de las del patrón, queda registrada como hecha
+ * (no se propone otra vez); si todavía no llega, la app la programa sola como las demás.
+ */
+export async function crearMovimientoConPatron(movimiento: Omit<Movimiento, 'id'>, patron: PatronFijo): Promise<void> {
+  await db.transaction('rw', db.movimientos, db.recurrentes, db.ocurrencias, db.categorias, async () => {
+    const categoria = await db.categorias.get(movimiento.categoriaId)
+    const recurrenteId = await db.recurrentes.add(recurrenteDe(movimiento, patron, categoria?.nombre))
+    if (movimiento.fecha <= hoy() && esOcurrencia(patron, movimiento.fecha)) {
+      const movimientoId = await db.movimientos.add(movimiento)
+      await db.ocurrencias.add({ recurrenteId, fecha: movimiento.fecha, estado: 'registrada', movimientoId })
+    }
   })
-  await db.ocurrencias.add({ recurrenteId, fecha: movimiento.fecha, estado: 'registrada', movimientoId: movimiento.id })
+}
+
+/**
+ * Crea el recurrente que corresponde a un movimiento que ya existe (por defecto, mensual el mismo día). Si la fecha del
+ * movimiento es una de las del patrón, queda como su vencimiento ya registrado; si no, el movimiento queda aparte.
+ */
+async function volverRecurrente(movimiento: Movimiento & { id: number }, patron?: PatronFijo): Promise<void> {
+  const elegido: PatronFijo = patron ?? { dias: [Number(movimiento.fecha.slice(8, 10))] }
+  const categoria = await db.categorias.get(movimiento.categoriaId)
+  const recurrenteId = await db.recurrentes.add(recurrenteDe(movimiento, elegido, categoria?.nombre))
+  if (esOcurrencia(elegido, movimiento.fecha)) {
+    await db.ocurrencias.add({ recurrenteId, fecha: movimiento.fecha, estado: 'registrada', movimientoId: movimiento.id })
+  }
+}
+
+/** Vuelve fijo un movimiento que ya existe, con el patrón elegido. Devuelve false si ya no se puede (borrado, programado o atado). */
+export async function volverFijo(id: number, patron: PatronFijo): Promise<boolean> {
+  return db.transaction('rw', [db.movimientos, db.recurrentes, db.ocurrencias, db.categorias, db.pagosDeuda, db.aportes, db.jornadas], async () => {
+    const movimiento = await db.movimientos.get(id)
+    if (!movimiento || movimiento.programado !== undefined || (await idsVinculados()).has(id)) return false
+    await volverRecurrente({ ...movimiento, id }, patron)
+    return true
+  })
 }
 
 /** Los movimientos que ya están atados a algo (un recurrente, un pago de deuda, un aporte o un trabajo por días). */
@@ -149,9 +182,7 @@ export async function eliminarRecurrente(id: number): Promise<void> {
   })
 }
 
-export function textoDias(dias: number[]): string {
-  const ordenados = [...dias].sort((a, b) => a - b)
-  return ordenados.length === 1
-    ? `Cada mes, el día ${ordenados[0]}`
-    : `Cada mes, los días ${ordenados.slice(0, -1).join(', ')} y ${ordenados[ordenados.length - 1]}`
+/** Cómo se repite un recurrente, en palabras: «Todos los días», «Cada semana: lunes y viernes», «Cada quincena: días 15 y 30»… */
+export function textoDias(recurrente: Pick<Recurrente, 'frecuencia' | 'dias'>): string {
+  return textoPatron(recurrente)
 }

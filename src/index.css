@@ -399,5 +399,30 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .lista-elegir .elegir-texto small { color: var(--suave); }
 .boton:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ---------- Calendario y repetición ---------- */
+.boton-fecha {
+  min-height: 48px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo);
+  color: var(--texto); font: inherit; font-size: 1rem; text-align: left; cursor: pointer;
+}
+.repite { color: var(--acento); font-weight: 600; font-size: 0.9rem; }
+.calendario-mes { margin-bottom: 8px; }
+.rejilla-calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+.encabezado-cal { text-align: center; font-size: 0.72rem; color: var(--suave); padding: 4px 0; }
+.dia-cal {
+  aspect-ratio: 1; min-height: 40px; border: 0; border-radius: 50%; background: none; color: var(--texto);
+  font: inherit; font-size: 0.95rem; cursor: pointer; position: relative;
+}
+.dia-cal.marcado { background: color-mix(in srgb, var(--acento) 22%, var(--tarjeta)); font-weight: 700; }
+.dia-cal.elegido { background: var(--verde); color: #fff; font-weight: 700; }
+.dia-cal.es-hoy:not(.elegido) { outline: 2px solid var(--acento); outline-offset: -2px; }
+.resumen-fecha { margin: 4px 0 14px; font-size: 0.92rem; line-height: 1.4; }
+.selector-repeticion .chips { margin-bottom: 8px; }
+.dos-dias, .selector-repeticion .dos-dias { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dia-del-mes { display: flex; flex-direction: column; gap: 4px; }
+.dia-del-mes input {
+  min-height: 48px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--borde);
+  background: var(--fondo); color: var(--texto); font: inherit; font-size: 1rem; width: 100%;
+}
+
 /* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
 .lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }

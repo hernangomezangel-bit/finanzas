@@ -87,7 +87,7 @@ async function calcularDeseadas(): Promise<Deseada[]> {
   for (const r of recurrentes) {
     if (!r.activo) continue
     const resueltas = new Set(ocurrencias.flatMap((o) => (o.recurrenteId === r.id ? [o.fecha] : [])))
-    for (const fecha of vencimientosAbiertos(r.dias, r.creado, resueltas, hoyTexto, r.creado, hasta)) {
+    for (const fecha of vencimientosAbiertos({ frecuencia: r.frecuencia, dias: r.dias }, r.creado, resueltas, hoyTexto, r.creado, hasta)) {
       deseadas.push({
         clave: claveProgramado('recurrente', r.id!, fecha),
         origen: 'recurrente',

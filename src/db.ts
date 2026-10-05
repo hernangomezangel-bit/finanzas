@@ -51,7 +51,12 @@ export interface Recurrente {
   monto: number
   categoriaId: number
   nota: string
-  /** Días del mes en que cae (uno = mensual, dos = quincenal). */
+  /** Cómo se repite. Sin valor es mensual (así eran todos al principio). */
+  frecuencia?: Frecuencia
+  /**
+   * Mensual: días del mes en que cae (uno = mensual, dos = quincenal). Semanal: días de la semana (0 = domingo … 6 = sábado),
+   * uno o varios. Diaria: vacío.
+   */
   dias: number[]
   /** Desde cuándo cuenta; no se proponen fechas anteriores. */
   creado: string

@@ -29,8 +29,9 @@ import type { TipoTasa } from './plan'
  * Versión 7: las metas de ahorro pueden ser un ahorro programado (cuota fija), y los aportes pueden ser cuotas omitidas.
  * Versión 8: los gastos pueden ser cuotas programadas de deudas o ahorros que la app creó sola.
  * Versión 9: también los movimientos recurrentes (gastos e ingresos fijos) se programan por adelantado.
+ * Versión 10: los recurrentes pueden repetirse todos los días o por días de la semana, no solo por días del mes.
  */
-export const VERSION_RESPALDO = 9
+export const VERSION_RESPALDO = 10
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -132,9 +133,19 @@ function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, C
   if (!esEntero(r.monto) || r.monto <= 0) return falla(`El recurrente "${r.nombre}" tiene un monto no válido.`)
   if (!esEntero(r.categoriaId) || !categoriasPorId.has(r.categoriaId)) return falla(`El recurrente "${r.nombre}" usa una categoría que no existe en la copia.`)
   if (typeof r.nota !== 'string' || r.nota.length > 200) return falla(`El recurrente "${r.nombre}" tiene una nota no válida.`)
-  if (!Array.isArray(r.dias) || r.dias.length < 1 || r.dias.length > 4 || !r.dias.every((d) => esEntero(d) && d >= 1 && d <= 31)) {
-    return falla(`El recurrente "${r.nombre}" tiene días no válidos.`)
+  if (r.frecuencia !== undefined && r.frecuencia !== 'diaria' && r.frecuencia !== 'semanal' && r.frecuencia !== 'mensual') {
+    return falla(`El recurrente "${r.nombre}" tiene una frecuencia no válida.`)
   }
+  // Los días significan cosas distintas según cómo se repite: del mes, de la semana, o ninguno si es diario.
+  const dias = r.dias
+  const diasValidos =
+    Array.isArray(dias) &&
+    (r.frecuencia === 'diaria'
+      ? dias.length === 0
+      : r.frecuencia === 'semanal'
+        ? dias.length >= 1 && dias.length <= 7 && dias.every((d) => esEntero(d) && d >= 0 && d <= 6)
+        : dias.length >= 1 && dias.length <= 4 && dias.every((d) => esEntero(d) && d >= 1 && d <= 31))
+  if (!diasValidos) return falla(`El recurrente "${r.nombre}" tiene días no válidos.`)
   if (!esFechaValida(r.creado)) return falla(`El recurrente "${r.nombre}" tiene una fecha de inicio no válida.`)
   if (typeof r.activo !== 'boolean') return falla(`El recurrente "${r.nombre}" tiene un dato no válido.`)
   return {
@@ -144,6 +155,8 @@ function validarRecurrente(r: unknown, i: number, categoriasPorId: Map<number, C
     monto: r.monto,
     categoriaId: r.categoriaId,
     nota: r.nota,
+    // Mensual se guarda sin "frecuencia", como siempre.
+    ...(r.frecuencia === 'diaria' || r.frecuencia === 'semanal' ? { frecuencia: r.frecuencia } : {}),
     dias: [...new Set(r.dias as number[])].sort((a, b) => a - b),
     creado: r.creado,
     activo: r.activo,

@@ -3,8 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Recurrente, type Tipo } from '../db'
 import { hoy } from '../fechas'
 import { eliminarRecurrente } from '../recurrentes'
+import { esRepeticionValida, patronDe, repeticionDe, repeticionPorDefecto, type Repeticion } from '../repeticion'
 import CampoMonto from '../componentes/CampoMonto'
 import Hoja from '../componentes/Hoja'
+import SelectorRepeticion from '../componentes/SelectorRepeticion'
 
 export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: Recurrente; alCerrar: () => void }) {
   const editando = recurrente !== undefined
@@ -12,8 +14,9 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
   const [nombre, setNombre] = useState(recurrente?.nombre ?? '')
   const [monto, setMonto] = useState(recurrente?.monto ?? 0)
   const [categoriaId, setCategoriaId] = useState<number | null>(recurrente?.categoriaId ?? null)
-  const [dia1, setDia1] = useState(recurrente ? String(recurrente.dias[0]) : '')
-  const [dia2, setDia2] = useState(recurrente?.dias[1] !== undefined ? String(recurrente.dias[1]) : '')
+  const [repeticion, setRepeticion] = useState<Repeticion>(() =>
+    recurrente ? repeticionDe(recurrente) : repeticionPorDefecto('mensual', hoy()),
+  )
   const [error, setError] = useState('')
 
   const categorias = useLiveQuery(() => db.categorias.where('tipo').equals(tipo).toArray(), [tipo])
@@ -28,11 +31,16 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
   async function guardar() {
     if (monto <= 0) return setError('Escribe un monto mayor a cero.')
     if (categoriaId === null) return setError('Elige una categoría.')
-    const d1 = Number(dia1)
-    const d2 = dia2.trim() === '' ? undefined : Number(dia2)
-    const valido = (d: number) => Number.isInteger(d) && d >= 1 && d <= 31
-    if (!valido(d1)) return setError('Escribe el día del mes (de 1 a 31).')
-    if (d2 !== undefined && (!valido(d2) || d2 === d1)) return setError('El segundo día debe ser distinto, de 1 a 31.')
+    const patron = patronDe(repeticion)
+    if (!patron || !esRepeticionValida(repeticion)) {
+      return setError(
+        repeticion.tipo === 'semanal'
+          ? 'Elige al menos un día de la semana.'
+          : repeticion.tipo === 'quincenal'
+            ? 'Escribe un día de la primera quincena (1 a 15) y uno de la segunda (16 a 31).'
+            : 'Escribe un día del mes entre 1 y 31.',
+      )
+    }
 
     const categoria = visibles.find((c) => c.id === categoriaId)
     const datos = {
@@ -40,10 +48,20 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
       tipo,
       monto,
       categoriaId,
-      dias: d2 !== undefined ? [d1, d2].sort((a, b) => a - b) : [d1],
+      dias: patron.dias,
     }
-    if (editando) await db.recurrentes.update(recurrente.id!, datos)
-    else await db.recurrentes.add({ ...datos, nota: '', creado: hoy(), activo: true })
+    if (editando) {
+      // undefined borra la frecuencia al volver a mensual (que es lo que significa no tenerla).
+      await db.recurrentes.update(recurrente.id!, { ...datos, frecuencia: patron.frecuencia })
+    } else {
+      await db.recurrentes.add({
+        ...datos,
+        ...(patron.frecuencia ? { frecuencia: patron.frecuencia } : {}),
+        nota: '',
+        creado: hoy(),
+        activo: true,
+      })
+    }
     alCerrar()
   }
 
@@ -90,12 +108,16 @@ export default function FormRecurrente({ recurrente, alCerrar }: { recurrente?: 
       </div>
 
       <div className="campo">
-        ¿Qué día del mes?
-        <div className="dos-dias">
-          <input inputMode="numeric" maxLength={2} placeholder="Ej: 5" value={dia1} aria-label="Día del mes" onChange={(e) => setDia1(e.target.value.replace(/\D/g, ''))} />
-          <input inputMode="numeric" maxLength={2} placeholder="Otro día (quincena)" value={dia2} aria-label="Segundo día, si es quincenal" onChange={(e) => setDia2(e.target.value.replace(/\D/g, ''))} />
-        </div>
-        <small className="ayuda">Si el mes no tiene ese día (31 en abril), se usa el último día del mes.</small>
+        ¿Cada cuánto?
+        <SelectorRepeticion
+          repeticion={repeticion}
+          fechaReferencia={hoy()}
+          alCambiar={(r) => {
+            setRepeticion(r)
+            setError('')
+          }}
+          permiteUnica={false}
+        />
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
