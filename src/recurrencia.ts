@@ -69,3 +69,45 @@ export function pendientes(programas: Programa[], resueltas: Set<string>, hoy: s
 export function claveOcurrencia(recurrenteId: number, fecha: string): string {
   return `${recurrenteId}|${fecha}`
 }
+
+// ---------- Cuotas de ahorro programado (diarias, semanales o mensuales) ----------
+
+export type Frecuencia = 'diaria' | 'semanal' | 'mensual'
+
+export interface ProgramaCuotas {
+  frecuencia: Frecuencia
+  /** Semanal: día de la semana (0 = domingo … 6 = sábado). Mensual: día del mes (1 a 31). Diaria: se ignora. */
+  dia: number
+  /** Fecha de la primera cuota posible. */
+  inicio: string
+}
+
+function sumarDias(fecha: string, dias: number): string {
+  return restarDias(fecha, -dias)
+}
+
+/** Todas las cuotas entre `inicio` y `hasta`, ambas incluidas, en orden. */
+export function fechasCuotas(p: ProgramaCuotas, hasta: string, desde: string = p.inicio): string[] {
+  const primero = desde > p.inicio ? desde : p.inicio
+  if (primero > hasta) return []
+  if (p.frecuencia === 'mensual') return fechasEntre([p.dia], primero, hasta)
+  const fechas: string[] = []
+  for (let f = primero; f <= hasta; f = sumarDias(f, 1)) {
+    const [a, m, d] = f.split('-').map(Number)
+    if (p.frecuencia === 'diaria' || new Date(a, m - 1, d).getDay() === p.dia) fechas.push(f)
+  }
+  return fechas
+}
+
+/** Cuántos días hacia atrás se siguen proponiendo cuotas atrasadas; una cuota diaria no puede acumularse por meses. */
+const VENTANA_CUOTAS: Record<Frecuencia, number> = { diaria: 6, semanal: 34, mensual: VENTANA_DIAS }
+
+/**
+ * Las cuotas que ya vencieron (hasta hoy y hasta el final del plan) y todavía no se registraron ni se omitieron.
+ * `resueltas` son las fechas ya atendidas.
+ */
+export function cuotasPendientes(p: ProgramaCuotas, fin: string | undefined, resueltas: Set<string>, hoy: string): string[] {
+  const piso = restarDias(hoy, VENTANA_CUOTAS[p.frecuencia])
+  const hasta = fin !== undefined && fin < hoy ? fin : hoy
+  return fechasCuotas(p, hasta, piso).filter((f) => !resueltas.has(f))
+}

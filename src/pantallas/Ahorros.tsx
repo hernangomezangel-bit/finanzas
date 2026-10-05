@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Aporte, type Meta } from '../db'
 import { pesos } from '../formato'
 import BarraProgreso from '../componentes/BarraProgreso'
-import { serieAcumulada } from '../ahorros'
+import { serieAcumulada, textoFrecuencia } from '../ahorros'
 import GraficaCrecimiento from '../componentes/GraficaCrecimiento'
 import DetalleMeta from './DetalleMeta'
 import FormMeta from './FormMeta'
@@ -37,7 +37,10 @@ export default function Ahorros() {
           <span className="icono-meta" aria-hidden="true">{m.icono}</span>
           <div>
             <strong>{m.nombre}</strong>
-            <span className="etiqueta">{m.tipo === 'inversion' ? 'Inversión' : 'Gasto programado'}</span>
+            <span className="etiqueta">
+              {m.tipo === 'inversion' ? 'Inversión' : 'Gasto programado'}
+              {m.programa && ` · ${pesos(m.programa.cuota)} ${textoFrecuencia(m.programa)}`}
+            </span>
           </div>
         </div>
         <BarraProgreso ahorrado={sumar(aportesDe(m.id!))} objetivo={m.objetivo} />

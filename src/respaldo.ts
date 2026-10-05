@@ -10,6 +10,7 @@ import {
   type Movimiento,
   type Ocurrencia,
   type PagoDeuda,
+  type ProgramaAhorro,
   type Recurrente,
   type Tipo,
   type TipoMeta,
@@ -24,8 +25,9 @@ import type { TipoTasa } from './plan'
  * Versión 4: agrega movimientos recurrentes y sus vencimientos, y marca los ingresos variables.
  * Versión 5: agrega los trabajos por días con meta diaria y sus jornadas.
  * Versión 6: las deudas guardan desde cuándo se proponen sus cuotas, y los pagos pueden ser cuotas omitidas.
+ * Versión 7: las metas de ahorro pueden ser un ahorro programado (cuota fija), y los aportes pueden ser cuotas omitidas.
  */
-export const VERSION_RESPALDO = 6
+export const VERSION_RESPALDO = 7
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -215,6 +217,9 @@ function validarMeta(m: unknown, i: number): Meta {
   if (typeof m.icono !== 'string' || m.icono.length > 8) return falla(`La meta "${m.nombre}" tiene un ícono no válido.`)
   if (!esFechaValida(m.creada)) return falla(`La meta "${m.nombre}" tiene una fecha de creación no válida.`)
   if (m.archivada !== undefined && typeof m.archivada !== 'boolean') return falla(`La meta "${m.nombre}" tiene un dato no válido.`)
+  const programa = m.programa === undefined ? undefined : validarPrograma(m.programa, m.nombre)
+  // Sin fecha final, un ahorro programado se propondría para siempre.
+  if (programa && !m.fechaMeta) return falla(`La meta "${m.nombre}" tiene un ahorro programado sin fecha final.`)
   return {
     id: m.id,
     nombre: m.nombre,
@@ -224,15 +229,39 @@ function validarMeta(m: unknown, i: number): Meta {
     creada: m.creada,
     ...(m.fechaMeta ? { fechaMeta: m.fechaMeta } : {}),
     ...(m.archivada ? { archivada: true } : {}),
+    ...(programa ? { programa } : {}),
   }
+}
+
+function validarPrograma(p: unknown, nombre: string): ProgramaAhorro {
+  if (!esObjeto(p)) return falla(`El ahorro programado de "${nombre}" no tiene el formato esperado.`)
+  if (!esEntero(p.cuota) || p.cuota <= 0) return falla(`El ahorro programado de "${nombre}" tiene una cuota no válida.`)
+  if (p.frecuencia !== 'diaria' && p.frecuencia !== 'semanal' && p.frecuencia !== 'mensual') {
+    return falla(`El ahorro programado de "${nombre}" tiene una frecuencia no válida.`)
+  }
+  const dia = p.dia
+  const diaValido =
+    p.frecuencia === 'diaria' ? dia === 0 : p.frecuencia === 'semanal' ? esEntero(dia) && dia >= 0 && dia <= 6 : esEntero(dia) && dia >= 1 && dia <= 31
+  if (!diaValido) return falla(`El ahorro programado de "${nombre}" tiene un día no válido.`)
+  if (!esFechaValida(p.inicio)) return falla(`El ahorro programado de "${nombre}" tiene una fecha de inicio no válida.`)
+  return { cuota: p.cuota, frecuencia: p.frecuencia, dia: dia as number, inicio: p.inicio }
 }
 
 function validarAporte(a: unknown, i: number, metasPorId: Set<number>, movimientosPorId: Set<number>): Aporte {
   if (!esObjeto(a)) return falla(`El aporte ${i + 1} no tiene el formato esperado.`)
   if (!esEntero(a.id) || a.id <= 0) return falla(`El aporte ${i + 1} no tiene un identificador válido.`)
   if (!esEntero(a.metaId) || !metasPorId.has(a.metaId)) return falla(`El aporte ${i + 1} usa una meta que no existe en la copia.`)
-  if (!esEntero(a.monto) || a.monto <= 0) return falla(`El aporte ${i + 1} tiene un monto no válido.`)
+  if (a.omitida !== undefined && typeof a.omitida !== 'boolean') return falla(`El aporte ${i + 1} tiene un dato no válido.`)
+  const omitida = a.omitida === true
+  // Una cuota omitida no es un aporte: no suma dinero y siempre indica a qué cuota se refiere.
+  if (omitida) {
+    if (a.monto !== 0) return falla(`La cuota omitida ${i + 1} no puede tener dinero.`)
+    if (!esFechaValida(a.fechaCuota)) return falla(`La cuota omitida ${i + 1} no indica su fecha.`)
+  } else if (!esEntero(a.monto) || a.monto <= 0) {
+    return falla(`El aporte ${i + 1} tiene un monto no válido.`)
+  }
   if (!esFechaValida(a.fecha)) return falla(`El aporte ${i + 1} tiene una fecha no válida.`)
+  if (a.fechaCuota !== undefined && !esFechaValida(a.fechaCuota)) return falla(`El aporte ${i + 1} tiene una fecha de cuota no válida.`)
   if (typeof a.nota !== 'string' || a.nota.length > 200) return falla(`El aporte ${i + 1} tiene una nota no válida.`)
   if (a.movimientoId !== undefined && !esEntero(a.movimientoId)) return falla(`El aporte ${i + 1} tiene un dato no válido.`)
   // Si el gasto enlazado se borró del Presupuesto, el aporte sigue valiendo; solo se suelta el enlace.
@@ -240,10 +269,12 @@ function validarAporte(a: unknown, i: number, metasPorId: Set<number>, movimient
   return {
     id: a.id,
     metaId: a.metaId,
-    monto: a.monto,
+    monto: a.monto as number,
     fecha: a.fecha,
     nota: a.nota,
     ...(enlazado ? { movimientoId: a.movimientoId as number } : {}),
+    ...(a.fechaCuota ? { fechaCuota: a.fechaCuota } : {}),
+    ...(omitida ? { omitida: true } : {}),
   }
 }
 

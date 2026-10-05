@@ -1,20 +1,29 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
+import { guardarAporte, leerCuotasAhorro, omitirCuotaAhorro, textoFrecuencia, type CuotaAhorro } from '../ahorros'
 import { leerCuotasPropuestas, omitirCuota, registrarPago, type CuotaPropuesta } from '../deudas'
 import { fechaCorta, hoy } from '../fechas'
 import { pesos } from '../formato'
 import { leerPendientes, registrarVencimiento, type PendienteConDatos } from '../recurrentes'
+import FormAporte from '../pantallas/FormAporte'
 import FormOcurrencia from '../pantallas/FormOcurrencia'
 import FormPago from '../pantallas/FormPago'
 
 type Item =
   | { clave: string; fecha: string; tipo: 'recurrente'; pendiente: PendienteConDatos }
   | { clave: string; fecha: string; tipo: 'deuda'; cuota: CuotaPropuesta }
+  | { clave: string; fecha: string; tipo: 'ahorro'; cuota: CuotaAhorro }
 
 async function leerItems(): Promise<Item[]> {
-  const [recurrentes, cuotas] = await Promise.all([leerPendientes(), leerCuotasPropuestas()])
+  const [recurrentes, cuotas, ahorros] = await Promise.all([leerPendientes(), leerCuotasPropuestas(), leerCuotasAhorro()])
   const items: Item[] = [
+    ...ahorros.map((cuota): Item => ({
+      clave: `a|${cuota.meta.id}|${cuota.fecha}`,
+      fecha: cuota.fecha,
+      tipo: 'ahorro',
+      cuota,
+    })),
     ...recurrentes.map((pendiente): Item => ({
       clave: `r|${pendiente.recurrenteId}|${pendiente.fecha}`,
       fecha: pendiente.fecha,
@@ -32,7 +41,8 @@ async function leerItems(): Promise<Item[]> {
 }
 
 /**
- * Lo que ya tocaba registrar: movimientos recurrentes y pagos de deudas (con el monto que indica el plan).
+ * Lo que ya tocaba registrar: movimientos recurrentes, pagos de deudas (con el monto que indica el plan)
+ * y cuotas de ahorro programado.
  * Un toque confirma; tocar el nombre permite cambiar el monto u omitirlo.
  */
 export default function PorRegistrar() {
@@ -69,6 +79,31 @@ export default function PorRegistrar() {
               </li>
             )
           }
+          if (item.tipo === 'ahorro') {
+            const { meta, monto } = item.cuota
+            return (
+              <li key={item.clave}>
+                <button className="fila-toca" onClick={() => setAbierto(item)}>
+                  <span className="icono-cat" aria-hidden="true">{meta.icono}</span>
+                  <span className="texto-mov">
+                    <span>Ahorro: {meta.nombre}</span>
+                    <small>
+                      {cuando(item.fecha)} · cuota {meta.programa ? textoFrecuencia(meta.programa) : ''}
+                    </small>
+                  </span>
+                  <strong className="monto-fila gasto">−{pesos(monto)}</strong>
+                </button>
+                <button
+                  className="boton-chico ancho"
+                  onClick={() =>
+                    void guardarAporte({ metaId: meta.id!, monto, fecha: item.fecha, nota: '', comoGasto: true, fechaCuota: item.fecha })
+                  }
+                >
+                  Registrar ahorro
+                </button>
+              </li>
+            )
+          }
           const { deuda, monto, extra } = item.cuota
           return (
             <li key={item.clave}>
@@ -96,6 +131,16 @@ export default function PorRegistrar() {
 
       {abierto?.tipo === 'recurrente' && (
         <FormOcurrencia pendiente={abierto.pendiente} alCerrar={() => setAbierto(null)} />
+      )}
+      {abierto?.tipo === 'ahorro' && (
+        <FormAporte
+          meta={abierto.cuota.meta}
+          montoInicial={abierto.cuota.monto}
+          fechaInicial={abierto.fecha}
+          fechaCuota={abierto.fecha}
+          alOmitir={() => omitirCuotaAhorro(abierto.cuota.meta, abierto.fecha)}
+          alCerrar={() => setAbierto(null)}
+        />
       )}
       {abierto?.tipo === 'deuda' && (
         <FormPago

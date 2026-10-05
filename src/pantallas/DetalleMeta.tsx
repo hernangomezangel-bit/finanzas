@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { db, type Aporte, type Meta } from '../db'
-import { eliminarMeta, serieAcumulada } from '../ahorros'
+import {
+  eliminarAporte,
+  eliminarMeta,
+  progresoCuotas,
+  proximaCuotaAhorro,
+  serieAcumulada,
+  textoFrecuencia,
+} from '../ahorros'
 import { fechaCorta, hoy, mesesHasta } from '../fechas'
 import { pesos } from '../formato'
 import BarraProgreso from '../componentes/BarraProgreso'
@@ -18,6 +25,13 @@ export default function DetalleMeta({ meta, aportes, alVolver }: { meta: Meta; a
   const cumplida = ahorrado >= meta.objetivo
   const lista = [...aportes].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id! - a.id!)
   const puntos = serieAcumulada(aportes, meta.creada)
+  const programa = meta.programa
+  const cuotas = progresoCuotas(meta, aportes)
+  const proxima = proximaCuotaAhorro(meta, aportes)
+
+  async function quitarOmision(aporte: Aporte) {
+    if (window.confirm('¿Quitar esta omisión? La cuota volverá a proponerse en Presupuesto.')) await eliminarAporte(aporte)
+  }
 
   async function borrar() {
     if (!window.confirm(`¿Eliminar la meta "${meta.nombre}" y todos sus aportes? Los gastos que ya contaron en el Presupuesto se conservan.`)) return
@@ -43,8 +57,27 @@ export default function DetalleMeta({ meta, aportes, alVolver }: { meta: Meta; a
         ) : (
           <p className="faltante">
             Faltan <strong>{pesos(faltante)}</strong>
-            {meta.fechaMeta && <> · {textoPlazo(meta.fechaMeta, faltante)}</>}
+            {meta.fechaMeta && !programa && <> · {textoPlazo(meta.fechaMeta, faltante)}</>}
           </p>
+        )}
+        {programa && (
+          <div className="programa-info">
+            <p>
+              <strong>Ahorro programado:</strong> {pesos(programa.cuota)} {textoFrecuencia(programa)}
+              {meta.fechaMeta && <>, hasta el {fechaCorta(meta.fechaMeta)}</>}.
+            </p>
+            {cuotas && (
+              <p>
+                Cuotas registradas: <strong>{cuotas.hechas} de {cuotas.total}</strong>. Al terminar habrás ahorrado{' '}
+                <strong>{pesos(meta.objetivo)}</strong>, sin intereses.
+              </p>
+            )}
+            {proxima && (
+              <p>
+                {proxima <= hoy() ? 'Cuota pendiente' : 'Próxima cuota'}: <strong>{fechaCorta(proxima)}</strong>
+              </p>
+            )}
+          </div>
         )}
         {!meta.archivada && (
           <button className="boton primario" onClick={() => setHoja({})}>+ Aportar</button>
@@ -67,17 +100,29 @@ export default function DetalleMeta({ meta, aportes, alVolver }: { meta: Meta; a
           </div>
         ) : (
           <ul className="tarjeta lista">
-            {lista.map((a) => (
-              <li key={a.id}>
-                <button onClick={() => setHoja({ aporte: a })}>
-                  <span className="texto-mov">
-                    <span>{fechaCorta(a.fecha)}</span>
-                    {a.nota && <small>{a.nota}</small>}
-                  </span>
-                  <strong className="ingreso">+{pesos(a.monto)}</strong>
-                </button>
-              </li>
-            ))}
+            {lista.map((a) =>
+              a.omitida ? (
+                <li key={a.id}>
+                  <button onClick={() => quitarOmision(a)} aria-label="Cuota omitida, toca para quitar la omisión">
+                    <span className="texto-mov">
+                      <span>Cuota del {fechaCorta(a.fechaCuota ?? a.fecha)}</span>
+                      <small>Omitida: no se registró aporte</small>
+                    </span>
+                    <strong className="etiqueta">Omitida</strong>
+                  </button>
+                </li>
+              ) : (
+                <li key={a.id}>
+                  <button onClick={() => setHoja({ aporte: a })}>
+                    <span className="texto-mov">
+                      <span>{fechaCorta(a.fecha)}</span>
+                      {a.nota && <small>{a.nota}</small>}
+                    </span>
+                    <strong className="ingreso">+{pesos(a.monto)}</strong>
+                  </button>
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>

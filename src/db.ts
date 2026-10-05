@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { hoy } from './fechas'
 import type { Estrategia, TipoTasa } from './plan'
+import type { Frecuencia } from './recurrencia'
 
 export type Tipo = 'gasto' | 'ingreso'
 
@@ -92,6 +93,18 @@ export interface Meta {
   creada: string
   /** Meta cerrada: cumplida o dejada de lado. */
   archivada?: boolean
+  /** Ahorro programado: una cuota fija que se repite hasta `fechaMeta`. La app propone cada cuota en Presupuesto. */
+  programa?: ProgramaAhorro
+}
+
+/** Cuota fija de un ahorro programado, como los de los bancos (sin intereses). */
+export interface ProgramaAhorro {
+  cuota: number
+  frecuencia: Frecuencia
+  /** Semanal: día de la semana (0 = domingo … 6 = sábado). Mensual: día del mes (1 a 31). Diaria: 0. */
+  dia: number
+  /** Fecha de la primera cuota posible (AAAA-MM-DD). */
+  inicio: string
 }
 
 export interface Aporte {
@@ -102,6 +115,10 @@ export interface Aporte {
   nota: string
   /** Gasto que este aporte generó en el Presupuesto, si se marcó esa opción. */
   movimientoId?: number
+  /** Cuota del ahorro programado que cubre este aporte (AAAA-MM-DD). */
+  fechaCuota?: string
+  /** Cuota que se dejó pasar sin registrar ("omitir"): monto 0, solo evita que se vuelva a proponer. */
+  omitida?: boolean
 }
 
 export interface Deuda {

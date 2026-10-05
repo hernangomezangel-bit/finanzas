@@ -351,3 +351,9 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .frente-meta.falta, .frente-meta.arriba { margin-bottom: 14px; }
 
 .dato small.detalle-dato { font-size: 0.78rem; color: var(--suave); line-height: 1.35; }
+
+/* ---------- Ahorro programado ---------- */
+.selector.tres { grid-template-columns: repeat(3, 1fr); }
+.programa-info { margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--fondo); font-size: 0.9rem; line-height: 1.45; }
+.programa-info p { margin: 0 0 4px; }
+.programa-info p:last-child { margin-bottom: 0; }
