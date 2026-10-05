@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { iniciarRevisionDeAvisos } from './avisosApp'
 import { iniciarSincronizacion } from './programados'
 import Presupuesto from './pantallas/Presupuesto'
 import Ahorros from './pantallas/Ahorros'
+import Avisos from './pantallas/Avisos'
 import Categorias from './pantallas/Categorias'
 import Deudas from './pantallas/Deudas'
 import IngresosPorDia from './pantallas/IngresosPorDia'
@@ -25,6 +27,8 @@ export default function App() {
 
   // Mantiene al día los gastos programados (cuotas de deudas y ahorros) mientras la app está abierta.
   useEffect(() => iniciarSincronizacion(), [])
+  // Al abrir la app (y al volver a ella) se revisa si hay pagos para hoy o mañana.
+  useEffect(() => iniciarRevisionDeAvisos(), [])
 
   return (
     <div className="app">
@@ -42,6 +46,7 @@ export default function App() {
             <Respaldo />
             <IngresosPorDia />
             <Recurrentes />
+            <Avisos />
             <Categorias />
           </>
         )}
