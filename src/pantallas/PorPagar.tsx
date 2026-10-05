@@ -55,7 +55,7 @@ export default function PorPagar() {
   const deudasSinDia = useLiveQuery(async () => {
     const [deudas, pagos] = await Promise.all([db.deudas.toArray(), db.pagosDeuda.toArray()])
     return deudas
-      .filter((d) => d.diaPago === undefined && saldoActual(d, pagos.filter((p) => p.deudaId === d.id)) > 0)
+      .filter((d) => !d.sinCuota && d.diaPago === undefined && saldoActual(d, pagos.filter((p) => p.deudaId === d.id)) > 0)
       .map((d) => d.nombre)
   })
 

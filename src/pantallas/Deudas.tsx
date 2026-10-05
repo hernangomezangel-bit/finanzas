@@ -7,6 +7,7 @@ import { pesos } from '../formato'
 import BarraProgreso from '../componentes/BarraProgreso'
 import DetalleDeuda from './DetalleDeuda'
 import FormDeuda from './FormDeuda'
+import FormPago from './FormPago'
 import PlanDeudas from './PlanDeudas'
 
 type Vista = { tipo: 'lista' } | { tipo: 'plan' } | { tipo: 'deuda'; id: number }
@@ -16,6 +17,7 @@ export default function Deudas() {
   const pagos = useLiveQuery(() => db.pagosDeuda.toArray())
   const [vista, setVista] = useState<Vista>({ tipo: 'lista' })
   const [creando, setCreando] = useState(false)
+  const [abonando, setAbonando] = useState<{ deuda: Deuda; saldo: number } | null>(null)
 
   if (!deudas || !pagos) return null
 
@@ -30,21 +32,24 @@ export default function Deudas() {
   const activas = deudas.filter((d) => saldos.get(d.id!)! > 0)
   const saldadas = deudas.filter((d) => saldos.get(d.id!) === 0)
   const total = activas.reduce((s, d) => s + saldos.get(d.id!)!, 0)
-  const minimos = activas.reduce((s, d) => s + d.pagoMinimo, 0)
+  // Las deudas sin cuota (préstamos sin interés) se muestran aparte y no cuentan en los pagos mínimos.
+  const conCuota = activas.filter((d) => !d.sinCuota)
+  const sinCuota = activas.filter((d) => d.sinCuota)
+  const minimos = conCuota.reduce((s, d) => s + d.pagoMinimo, 0)
 
   const tarjeta = (d: Deuda) => {
     const saldo = saldos.get(d.id!)!
     const proxima = fechaCuota(d, pagosDe(d.id!))
-    const noCubre = saldo > 0 && d.pagoMinimo <= interesDelMes(d, saldo)
+    const noCubre = saldo > 0 && !d.sinCuota && d.pagoMinimo <= interesDelMes(d, saldo)
     return (
-      <li key={d.id}>
+      <li key={d.id} className={d.sinCuota && saldo > 0 ? 'con-abono' : undefined}>
         <button className="tarjeta meta-tarjeta" onClick={() => setVista({ tipo: 'deuda', id: d.id! })}>
           <div className="meta-titulo">
             <span className="icono-meta" aria-hidden="true">{d.icono}</span>
             <div className="deuda-texto">
               <strong>{d.nombre}</strong>
               <span className="etiqueta">
-                {textoTasa(d)} · mínimo {pesos(d.pagoMinimo)}
+                {d.sinCuota ? 'Sin interés · sin pago mensual' : `${textoTasa(d)} · mínimo ${pesos(d.pagoMinimo)}`}
               </span>
             </div>
             <strong className={saldo > 0 ? 'gasto' : 'ingreso'}>{saldo > 0 ? pesos(saldo) : '¡Pagada! 🎉'}</strong>
@@ -57,6 +62,9 @@ export default function Deudas() {
           {proxima && saldo > 0 && <span className="etiqueta">Próximo pago: {fechaCorta(proxima)}</span>}
           {noCubre && <span className="alerta-chica">⚠️ El mínimo no cubre los intereses</span>}
         </button>
+        {d.sinCuota && saldo > 0 && (
+          <button className="boton secundario" onClick={() => setAbonando({ deuda: d, saldo })}>Abonar</button>
+        )}
       </li>
     )
   }
@@ -77,12 +85,22 @@ export default function Deudas() {
               <span className="etiqueta-grande">Debes en total</span>
               <strong className="total-grande gasto">{pesos(total)}</strong>
               <span className="pequeno">
-                en {activas.length} {activas.length === 1 ? 'deuda' : 'deudas'} · mínimos: {pesos(minimos)} al mes
+                en {activas.length} {activas.length === 1 ? 'deuda' : 'deudas'}
+                {conCuota.length > 0 && <> · mínimos: {pesos(minimos)} al mes</>}
+                {sinCuota.length > 0 && <> · {sinCuota.length} sin cuota ni interés</>}
               </span>
-              <button className="boton primario" onClick={() => setVista({ tipo: 'plan' })}>Ver mi plan de pago</button>
+              {conCuota.length > 0 && (
+                <button className="boton primario" onClick={() => setVista({ tipo: 'plan' })}>Ver mi plan de pago</button>
+              )}
             </section>
           )}
-          <ul className="lista-metas">{activas.map(tarjeta)}</ul>
+          {conCuota.length > 0 && <ul className="lista-metas">{conCuota.map(tarjeta)}</ul>}
+          {sinCuota.length > 0 && (
+            <>
+              <h3 className="subtitulo">Sin cuota ni interés</h3>
+              <ul className="lista-metas">{sinCuota.map(tarjeta)}</ul>
+            </>
+          )}
           {saldadas.length > 0 && (
             <details className="cerradas">
               <summary>Deudas pagadas ({saldadas.length})</summary>
@@ -94,6 +112,7 @@ export default function Deudas() {
 
       <button className="fab" onClick={() => setCreando(true)} aria-label="Agregar deuda">+</button>
       {creando && <FormDeuda alCerrar={() => setCreando(false)} />}
+      {abonando && <FormPago deuda={abonando.deuda} saldo={abonando.saldo} alCerrar={() => setAbonando(null)} />}
     </>
   )
 }

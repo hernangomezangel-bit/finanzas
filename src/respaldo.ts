@@ -31,8 +31,9 @@ import type { TipoTasa } from './plan'
  * Versión 9: también los movimientos recurrentes (gastos e ingresos fijos) se programan por adelantado.
  * Versión 10: los recurrentes pueden repetirse todos los días o por días de la semana, no solo por días del mes.
  * Versión 11: los recurrentes pueden cobrarse por día trabajado, con días de descanso (el total del mes de una vez).
+ * Versión 12: las deudas pueden ser préstamos sin interés ni pago mensual (sin cuota).
  */
-export const VERSION_RESPALDO = 11
+export const VERSION_RESPALDO = 12
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -317,7 +318,12 @@ function validarDeuda(d: unknown, i: number, propuestasDesdeSiFalta?: string): D
   if (!esEntero(d.saldoInicial) || d.saldoInicial <= 0) return falla(`La deuda "${d.nombre}" tiene un saldo no válido.`)
   if (typeof d.tasa !== 'number' || !Number.isFinite(d.tasa) || d.tasa < 0 || d.tasa > 1000) return falla(`La deuda "${d.nombre}" tiene una tasa no válida.`)
   if (d.tipoTasa !== 'ea' && d.tipoTasa !== 'mensual') return falla(`La deuda "${d.nombre}" tiene un tipo de tasa no válido.`)
-  if (!esEntero(d.pagoMinimo) || d.pagoMinimo <= 0) return falla(`La deuda "${d.nombre}" tiene un pago mínimo no válido.`)
+  if (d.sinCuota !== undefined && typeof d.sinCuota !== 'boolean') return falla(`La deuda "${d.nombre}" tiene un dato no válido.`)
+  const sinCuota = d.sinCuota === true
+  // Una deuda sin cuota no lleva interés, pago mínimo ni día de pago.
+  if (sinCuota ? d.pagoMinimo !== 0 || d.tasa !== 0 || d.diaPago !== undefined : !esEntero(d.pagoMinimo) || d.pagoMinimo <= 0) {
+    return falla(`La deuda "${d.nombre}" tiene un pago mínimo no válido.`)
+  }
   if (d.diaPago !== undefined && (!esEntero(d.diaPago) || d.diaPago < 1 || d.diaPago > 31)) return falla(`La deuda "${d.nombre}" tiene un día de pago no válido.`)
   if (!esFechaValida(d.creada)) return falla(`La deuda "${d.nombre}" tiene una fecha de creación no válida.`)
   if (d.propuestasDesde !== undefined && !esFechaValida(d.propuestasDesde)) return falla(`La deuda "${d.nombre}" tiene una fecha de inicio de propuestas no válida.`)
@@ -329,7 +335,8 @@ function validarDeuda(d: unknown, i: number, propuestasDesdeSiFalta?: string): D
     saldoInicial: d.saldoInicial,
     tasa: d.tasa,
     tipoTasa: d.tipoTasa as TipoTasa,
-    pagoMinimo: d.pagoMinimo,
+    pagoMinimo: d.pagoMinimo as number,
+    ...(sinCuota ? { sinCuota: true } : {}),
     creada: d.creada,
     ...(d.diaPago !== undefined ? { diaPago: d.diaPago } : {}),
     ...(propuestasDesde ? { propuestasDesde } : {}),

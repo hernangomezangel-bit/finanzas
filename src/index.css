@@ -435,6 +435,10 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 /* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
 .lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }
 
+/* Deuda sin cuota: el botón Abonar va pegado debajo de su tarjeta. */
+.con-abono .tarjeta { margin-bottom: 8px; }
+.con-abono .boton { margin-bottom: 14px; }
+
 /* ---------- Por registrar: botón con los nombres que despliega las fichas ---------- */
 .por-registrar { margin-bottom: 14px; }
 .resumen-pend {

@@ -79,7 +79,9 @@ export interface PlanCalculado {
 
 /** El plan de pago con el dinero extra y el método elegidos; es el mismo que ve la pantalla del plan. */
 export function calcularPlan(deudas: Deuda[], pagos: PagoDeuda[], extra: number, elegida?: Estrategia): PlanCalculado {
+  // Las deudas sin cuota no entran en el plan: no tienen pago mensual. Se pagan después, con lo que se libere.
   const activas = deudas
+    .filter((d) => !d.sinCuota)
     .map((d) => aDeudaPlan(d, pagos.filter((p) => p.deudaId === d.id)))
     .filter((d) => d.saldo > 0)
   const bola = simular(activas, extra, 'bola')
@@ -171,7 +173,7 @@ export async function registrarPago(deuda: Deuda, datos: DatosPago): Promise<voi
 
     // La app ya creó el gasto de esa cuota (programado): se confirma ese mismo, sin crear uno segundo.
     const programado = fechaCuota ? await buscarProgramado('deuda', deuda.id!, fechaCuota) : undefined
-    const nota = `Pago de ${deuda.nombre}`.slice(0, 200)
+    const nota = `${deuda.sinCuota ? 'Abono a' : 'Pago de'} ${deuda.nombre}`.slice(0, 200)
 
     let movimientoId: number | undefined
     if (datos.comoGasto) {

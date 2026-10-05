@@ -39,6 +39,7 @@ export default function FormDeuda({
   const editando = deuda !== undefined
   const [nombre, setNombre] = useState(deuda?.nombre ?? '')
   const [icono, setIcono] = useState(deuda?.icono ?? '💳')
+  const [sinCuota, setSinCuota] = useState(deuda?.sinCuota ?? false)
   const [saldo, setSaldo] = useState(saldoActual ?? 0)
   const [tasa, setTasa] = useState(deuda ? String(deuda.tasa).replace('.', ',') : '')
   const [tipoTasa, setTipoTasa] = useState<TipoTasa>(deuda?.tipoTasa ?? 'ea')
@@ -90,10 +91,22 @@ export default function FormDeuda({
     }
   }
 
+  /** Una deuda sin cuota se guarda con interés 0 y sin pago mínimo ni día de pago. */
+  async function guardarSinCuota(limpio: string) {
+    const datos = { nombre: limpio, icono, tasa: 0, tipoTasa: 'ea' as const, pagoMinimo: 0, sinCuota: true }
+    if (editando) {
+      await db.deudas.put({ ...datos, id: deuda.id, creada: deuda.creada, saldoInicial: saldo + capitalPagado })
+    } else {
+      await db.deudas.add({ ...datos, saldoInicial: saldo, creada: hoy() })
+    }
+    alCerrar()
+  }
+
   async function guardar() {
     const limpio = nombre.trim()
     if (!limpio) return setError('Escribe un nombre para la deuda.')
     if (saldo <= 0) return setError('Escribe cuánto debes hoy.')
+    if (sinCuota) return guardarSinCuota(limpio)
     if (!tasaValida) return setError('Escribe la tasa de interés (puede ser 0) o el número de cuotas.')
     if (tipoTasa === 'mensual' && tasaNumero > 30) return setError('Una tasa mensual mayor a 30 % es poco probable. ¿Era anual?')
     if (tipoTasa === 'ea' && tasaNumero > 1000) return setError('La tasa anual parece demasiado alta.')
@@ -126,13 +139,39 @@ export default function FormDeuda({
 
   return (
     <Hoja titulo={editando ? 'Editar deuda' : 'Nueva deuda'} alCerrar={alCerrar}>
+      {!editando && (
+        <div className="campo">
+          Tipo de deuda
+          <div className="selector" role="group" aria-label="Tipo de deuda">
+            <button
+              className={sinCuota ? '' : 'sel ingreso'}
+              onClick={() => {
+                setSinCuota(false)
+                if (icono === '👤') setIcono('💳')
+              }}
+            >
+              Con cuotas e interés
+            </button>
+            <button
+              className={sinCuota ? 'sel ingreso' : ''}
+              onClick={() => {
+                setSinCuota(true)
+                if (icono === '💳') setIcono('👤')
+              }}
+            >
+              Sin cuota (préstamo)
+            </button>
+          </div>
+        </div>
+      )}
+
       <label className="campo">
         Nombre
         <input
           type="text"
           maxLength={40}
           autoFocus
-          placeholder="Ej: Tarjeta de crédito"
+          placeholder={sinCuota ? 'Ej: Préstamo de mi tío' : 'Ej: Tarjeta de crédito'}
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
         />
@@ -147,6 +186,13 @@ export default function FormDeuda({
         }}
       />
 
+      {sinCuota ? (
+        <p className="ayuda">
+          Sin interés y sin pago mensual: no afecta tu Presupuesto ni tu plan de pago. Solo queda guardada para que la
+          veas y la recuerdes, y puedes abonarle cuando tengas dinero extra.
+        </p>
+      ) : (
+      <>
       <CampoMonto
         etiqueta="Pago mínimo mensual (tu cuota)"
         valor={pagoMinimo}
@@ -260,6 +306,8 @@ export default function FormDeuda({
           dinero extra si lo hay). Sin él, tendrás que registrar los pagos tú.
         </small>
       </label>
+      </>
+      )}
 
       <div className="campo">
         Ícono

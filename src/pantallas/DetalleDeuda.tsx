@@ -23,7 +23,7 @@ export default function DetalleDeuda({
   const lista = [...pagos].sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id! - a.id!)
   const proxima = fechaCuota(deuda, pagos)
   const capitalPagado = pagos.reduce((s, p) => s + p.aCapital, 0)
-  const noCubre = saldo > 0 && deuda.pagoMinimo <= interes
+  const noCubre = saldo > 0 && !deuda.sinCuota && deuda.pagoMinimo <= interes
 
   async function quitarPago(pago: PagoDeuda) {
     const aviso = pago.omitida
@@ -49,7 +49,9 @@ export default function DetalleDeuda({
           <span className="icono-meta" aria-hidden="true">{deuda.icono}</span>
           <div>
             <h2>{deuda.nombre}</h2>
-            <span className="etiqueta">{textoTasa(deuda)} · mínimo {pesos(deuda.pagoMinimo)}</span>
+            <span className="etiqueta">
+              {deuda.sinCuota ? 'Sin interés · sin pago mensual' : `${textoTasa(deuda)} · mínimo ${pesos(deuda.pagoMinimo)}`}
+            </span>
           </div>
         </div>
 
@@ -61,22 +63,26 @@ export default function DetalleDeuda({
           <p className="mensaje ok">¡Deuda pagada! 🎉</p>
         ) : (
           <>
-            <p className="faltante">
-              Interés estimado de este mes: <strong>{pesos(interes)}</strong>
-              {proxima && <> · Próximo pago: <strong>{fechaCorta(proxima)}</strong></>}
-            </p>
+            {deuda.sinCuota ? (
+              <p className="faltante">Sin fecha de pago: la pagas cuando puedas, con lo que te sobre.</p>
+            ) : (
+              <p className="faltante">
+                Interés estimado de este mes: <strong>{pesos(interes)}</strong>
+                {proxima && <> · Próximo pago: <strong>{fechaCorta(proxima)}</strong></>}
+              </p>
+            )}
             {noCubre && (
               <p className="alerta">
                 ⚠️ Tu pago mínimo no cubre los intereses: pagando solo el mínimo, la deuda no baja. Aumenta lo que pagas.
               </p>
             )}
-            <button className="boton primario" onClick={() => setHoja('pago')}>Registrar pago</button>
+            <button className="boton primario" onClick={() => setHoja('pago')}>{deuda.sinCuota ? 'Abonar' : 'Registrar pago'}</button>
           </>
         )}
       </section>
 
       <section>
-        <h3 className="subtitulo">Pagos hechos</h3>
+        <h3 className="subtitulo">{deuda.sinCuota ? 'Abonos hechos' : 'Pagos hechos'}</h3>
         {lista.length === 0 ? (
           <div className="tarjeta vacia">
             <p>Aún no has registrado pagos.</p>
@@ -98,7 +104,11 @@ export default function DetalleDeuda({
                     <>
                       <span className="texto-mov">
                         <span>{fechaCorta(p.fecha)}</span>
-                        <small>Interés {pesos(p.interes)} · {p.aCapital >= 0 ? `Capital ${pesos(p.aCapital)}` : `Deuda +${pesos(-p.aCapital)}`}</small>
+                        <small>
+                          {deuda.sinCuota
+                            ? 'Abono'
+                            : `Interés ${pesos(p.interes)} · ${p.aCapital >= 0 ? `Capital ${pesos(p.aCapital)}` : `Deuda +${pesos(-p.aCapital)}`}`}
+                        </small>
                       </span>
                       <strong className="ingreso">{pesos(p.monto)}</strong>
                     </>
@@ -109,7 +119,7 @@ export default function DetalleDeuda({
           </ul>
         )}
         {lista.length > 0 && <p className="pequeno nota-pie">Toca un pago para eliminarlo si te equivocaste.</p>}
-        {deuda.diaPago === undefined && saldo > 0 && (
+        {deuda.diaPago === undefined && !deuda.sinCuota && saldo > 0 && (
           <p className="pequeno nota-pie">
             Pon el día de pago (Editar deuda) y la app te propondrá cada pago en Presupuesto.
           </p>

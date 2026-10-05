@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Ajuste, type Deuda, type PagoDeuda } from '../db'
-import { calcularPlan, fechaCuota, guardarAjuste } from '../deudas'
+import { calcularPlan, fechaCuota, guardarAjuste, saldoActual } from '../deudas'
 import { fechaCorta, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { pesos } from '../formato'
 import { usePromedioVariable } from '../ingresos'
-import type { Estrategia, ResultadoPlan } from '../plan'
+import { mesesParaDeudasSinCuota, type Estrategia, type ResultadoPlan } from '../plan'
 import CampoMonto from '../componentes/CampoMonto'
 import GraficaSaldo from '../componentes/GraficaSaldo'
 import FormPago from './FormPago'
@@ -71,6 +71,15 @@ function Contenido({
 
   const problemas = activas.filter((d) => d.minimo <= Math.round(d.saldo * d.tm))
 
+  // Los préstamos sin cuota ni interés quedan para después: se pagan cuando se terminen las demás deudas.
+  const sinCuota = deudas
+    .filter((d) => d.sinCuota)
+    .map((d) => ({ nombre: d.nombre, icono: d.icono, saldo: saldoActual(d, pagosDe(d.id!)) }))
+    .filter((d) => d.saldo > 0)
+  const avisoSinCuota = sinCuota.length > 0 && (
+    <AvisoSinCuota deudas={sinCuota} presupuesto={minimos + extra} mesesPlan={viable ? resultado.meses : null} />
+  )
+
   return (
     <>
       <button className="volver" onClick={alVolver}>‹ Todas las deudas</button>
@@ -98,6 +107,7 @@ function Contenido({
               mínimo o agrega dinero extra.
             </p>
           )}
+          {avisoSinCuota}
         </section>
       ) : (
         <>
@@ -171,6 +181,8 @@ function Contenido({
             </ul>
           </section>
 
+          {avisoSinCuota}
+
           <details className="tarjeta detalle-plan">
             <summary>Plan mes a mes ({resultado.meses} meses)</summary>
             {resultado.plan.slice(0, MESES_MOSTRADOS).map((m) => (
@@ -225,6 +237,40 @@ function Contenido({
         />
       )}
     </>
+  )
+}
+
+/**
+ * Recuerda las deudas sin cuota ni interés: no están en el plan, pero siguen después de las demás. Si hay con qué
+ * calcularlo, dice en cuánto tiempo se pagarían con lo mismo que ya se destina cada mes.
+ */
+function AvisoSinCuota({
+  deudas,
+  presupuesto,
+  mesesPlan,
+}: {
+  deudas: { nombre: string; icono: string; saldo: number }[]
+  presupuesto: number
+  mesesPlan: number | null
+}) {
+  const total = deudas.reduce((s, d) => s + d.saldo, 0)
+  const meses = mesesParaDeudasSinCuota(total, presupuesto)
+  const unidad = (n: number) => (n === 1 ? 'mes' : 'meses')
+  return (
+    <section className="tarjeta aviso-sin-cuota">
+      <h2>Después de estas deudas</h2>
+      <p className="ayuda">
+        Cuando termines las deudas con interés{mesesPlan ? ` (en unos ${mesesPlan} ${unidad(mesesPlan)})` : ''}, sigue con:{' '}
+        {deudas.map((d) => `${d.icono} ${d.nombre} (${pesos(d.saldo)})`).join(', ')}.
+        {meses !== null && (
+          <>
+            {' '}Con los {pesos(presupuesto)} que ya destinas cada mes, {deudas.length === 1 ? 'la' : 'las'} terminarías en
+            unos {meses} {unidad(meses)} más.
+          </>
+        )}
+      </p>
+      <p className="ayuda">Son un cálculo de referencia: no cambian tu Presupuesto. Puedes abonarles antes desde Deudas.</p>
+    </section>
   )
 }
 

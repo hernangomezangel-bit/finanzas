@@ -155,6 +155,11 @@ export interface Deuda {
   tasa: number
   tipoTasa: TipoTasa
   pagoMinimo: number
+  /**
+   * Préstamo sin interés ni pago mensual (de un familiar, por ejemplo): solo se guarda para verlo, recordarlo y abonarle
+   * cuando se pueda. Tiene tasa 0 y pago mínimo 0; no entra en el plan ni crea gastos programados.
+   */
+  sinCuota?: boolean
   /** Día del mes (1 a 31) en que se paga la cuota; opcional. */
   diaPago?: number
   creada: string

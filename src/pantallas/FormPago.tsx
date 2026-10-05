@@ -44,14 +44,16 @@ export default function FormPago({
   }
 
   return (
-    <Hoja titulo={`Pago a ${deuda.nombre}`} alCerrar={alCerrar}>
+    <Hoja titulo={`${deuda.sinCuota ? 'Abono a' : 'Pago a'} ${deuda.nombre}`} alCerrar={alCerrar}>
       {fechaCuota && <p className="ayuda">Cuota del {fechaCorta(fechaCuota)}.</p>}
-      <CampoMonto etiqueta="¿Cuánto pagaste?" valor={monto} alCambiar={setMonto} autoFocus />
+      <CampoMonto etiqueta={deuda.sinCuota ? '¿Cuánto abonas?' : '¿Cuánto pagaste?'} valor={monto} alCambiar={setMonto} autoFocus />
 
       {monto > 0 && (
         <p className="desglose">
           {monto > tope ? (
             <>Con eso saldas la deuda: se registrarán <strong>{pesos(tope)}</strong>.</>
+          ) : deuda.sinCuota ? (
+            <>Sin interés: tu deuda baja a <strong>{pesos(saldo - montoReal)}</strong>.</>
           ) : (
             <>
               Interés estimado del mes: <strong>{pesos(interes)}</strong>.{' '}
@@ -77,7 +79,7 @@ export default function FormPago({
       </label>
 
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="boton primario" onClick={guardar}>Guardar pago</button>
+      <button className="boton primario" onClick={guardar}>{deuda.sinCuota ? 'Guardar abono' : 'Guardar pago'}</button>
       {alOmitir && (
         <button
           className="boton secundario"

@@ -43,6 +43,15 @@ export interface ResultadoPlan {
 const MAX_MESES = 1200
 const MESES_VISIBLES_SI_NO_VIABLE = 60
 
+/**
+ * Cuántos meses tardarías en pagar las deudas sin cuota (sin interés) cuando termines las demás, si destinas lo mismo
+ * que ya pagabas cada mes (mínimos más dinero extra). Null si no hay con qué estimarlo.
+ */
+export function mesesParaDeudasSinCuota(saldoSinCuota: number, presupuestoMensual: number): number | null {
+  if (saldoSinCuota <= 0 || presupuestoMensual <= 0) return null
+  return Math.ceil(saldoSinCuota / presupuestoMensual)
+}
+
 /** Convierte la tasa que escribe la persona a tasa efectiva mensual. */
 export function tasaMensual(tasa: number, tipo: TipoTasa): number {
   const t = tasa / 100
