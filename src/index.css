@@ -435,6 +435,34 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 /* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
 .lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }
 
+/* ---------- Por registrar: botón con los nombres que despliega las fichas ---------- */
+.por-registrar { margin-bottom: 14px; }
+.resumen-pend {
+  width: 100%; display: block; text-align: left; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+  background: var(--tarjeta); color: var(--texto); font: inherit; border: 2px solid var(--acento);
+}
+.cabecera-pend { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.cabecera-pend strong { font-size: 1rem; }
+.num-pend {
+  margin-left: 8px; padding: 1px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 700;
+  background: var(--acento); color: var(--tarjeta);
+}
+.flecha-pend { font-size: 1.4rem; line-height: 1; color: var(--acento); transition: transform 0.2s; }
+.resumen-pend.abierto .flecha-pend { transform: rotate(180deg); }
+.nombres-pend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.nombre-pend {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 11px 3px 4px;
+  border-radius: 999px; border: 1px solid var(--borde); background: var(--fondo); font-size: 0.82rem;
+}
+.nombre-pend.mas { padding: 3px 11px; color: var(--suave); }
+.mini-pend {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem;
+  background: color-mix(in srgb, #dc2626 12%, var(--tarjeta));
+}
+.texto-nombre-pend { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pista-pend { display: block; margin-top: 8px; color: var(--suave); font-size: 0.78rem; }
+.fichas-pend { margin: 8px 0 0; }
+
 /* ---------- Lista de gastos o ingresos del mes ---------- */
 .bloque-mov {
   background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px;

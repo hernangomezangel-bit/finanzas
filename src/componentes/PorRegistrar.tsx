@@ -40,24 +40,70 @@ async function leerItems(): Promise<Item[]> {
   return items.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.clave.localeCompare(b.clave))
 }
 
+/** Cuántos nombres se ven en el botón cerrado; el resto se resume como «+N más». */
+const NOMBRES_VISIBLES = 4
+
 /**
  * Lo que ya tocaba registrar: movimientos recurrentes, pagos de deudas (con el monto que indica el plan)
- * y cuotas de ahorro programado.
- * Un toque confirma; tocar el nombre permite cambiar el monto u omitirlo.
+ * y cuotas de ahorro programado. Cerrado es un botón con los nombres; al tocarlo se despliegan las fichas.
+ * En cada ficha, un toque confirma; tocar el nombre permite cambiar el monto u omitirlo.
  */
 export default function PorRegistrar() {
   const lista = useLiveQuery(leerItems)
   const categorias = useLiveQuery(() => db.categorias.toArray())
   const [abierto, setAbierto] = useState<Item | null>(null)
+  // Siempre arranca cerrado: solo el botón con los nombres.
+  const [desplegado, setDesplegado] = useState(false)
 
   if (!lista || !categorias || lista.length === 0) return null
 
   const hoyTexto = hoy()
   const cuando = (fecha: string) => (fecha === hoyTexto ? 'Hoy' : `Tocaba el ${fechaCorta(fecha)}`)
 
+  // Cada pendiente se resume en su ícono y su nombre, para la lista pequeña del botón.
+  const resumen = lista.map((item) => {
+    if (item.tipo === 'recurrente') {
+      const r = item.pendiente.recurrente
+      return { clave: item.clave, icono: categorias.find((c) => c.id === r.categoriaId)?.icono ?? '🧾', nombre: r.nombre }
+    }
+    if (item.tipo === 'ahorro') return { clave: item.clave, icono: item.cuota.meta.icono, nombre: `Ahorro: ${item.cuota.meta.nombre}` }
+    return { clave: item.clave, icono: item.cuota.deuda.icono, nombre: `Pago de ${item.cuota.deuda.nombre}` }
+  })
+  const visibles = resumen.slice(0, NOMBRES_VISIBLES)
+  const ocultos = resumen.length - visibles.length
+
   return (
-    <section className="tarjeta pendientes">
-      <h2>Por registrar ({lista.length})</h2>
+    <section className="por-registrar">
+      <button
+        className={desplegado ? 'resumen-pend abierto' : 'resumen-pend'}
+        aria-expanded={desplegado}
+        onClick={() => setDesplegado(!desplegado)}
+      >
+        <span className="cabecera-pend">
+          <span>
+            <strong>Por registrar</strong>
+            <span className="num-pend">{lista.length}</span>
+          </span>
+          <span className="flecha-pend" aria-hidden="true">⌄</span>
+        </span>
+        {!desplegado && (
+          <>
+            <span className="nombres-pend">
+              {visibles.map((r) => (
+                <span key={r.clave} className="nombre-pend">
+                  <span className="mini-pend" aria-hidden="true">{r.icono}</span>
+                  <span className="texto-nombre-pend">{r.nombre}</span>
+                </span>
+              ))}
+              {ocultos > 0 && <span className="nombre-pend mas">+{ocultos} más</span>}
+            </span>
+            <small className="pista-pend">Toca para ver y registrar</small>
+          </>
+        )}
+      </button>
+
+      {desplegado && (
+      <div className="tarjeta fichas-pend">
       <ul className="lista-pendientes">
         {lista.map((item) => {
           if (item.tipo === 'recurrente') {
@@ -128,6 +174,8 @@ export default function PorRegistrar() {
         })}
       </ul>
       <p className="ayuda">Toca el nombre para cambiar el monto u omitirlo.</p>
+      </div>
+      )}
 
       {abierto?.tipo === 'recurrente' && (
         <FormOcurrencia pendiente={abierto.pendiente} alCerrar={() => setAbierto(null)} />
