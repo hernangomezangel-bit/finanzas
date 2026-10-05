@@ -71,9 +71,9 @@ export default function PorRegistrar() {
                     <span>{r.nombre}</span>
                     <small>{cuando(item.fecha)}</small>
                   </span>
-                  <strong className={`monto-fila ${r.tipo}`}>{r.tipo === 'gasto' ? '−' : '+'}{pesos(r.monto)}</strong>
+                  <strong className={`monto-fila ${r.tipo}`}>{r.tipo === 'gasto' ? '−' : '+'}{pesos(item.pendiente.monto)}</strong>
                 </button>
-                <button className="boton-chico ancho" onClick={() => void registrarVencimiento(r, item.fecha, r.monto)}>
+                <button className="boton-chico ancho" onClick={() => void registrarVencimiento(r, item.fecha, item.pendiente.monto)}>
                   Registrar {r.tipo === 'gasto' ? 'gasto' : 'ingreso'}
                 </button>
               </li>

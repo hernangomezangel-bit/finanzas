@@ -94,6 +94,11 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
       <label className="campo">
         Fecha
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        {fecha > hoy() && (
+          <small className="ayuda">
+            La fecha todavía no llega: quedará como «{tipo === 'gasto' ? 'por pagar' : 'por recibir'}» hasta ese día.
+          </small>
+        )}
       </label>
 
       <label className="campo">
@@ -107,7 +112,8 @@ export default function FormMovimiento({ movimiento, mesActual, alCerrar }: Prop
           <span>
             Repetir cada mes
             <small>
-              Te lo propondré el día {Number(fecha.slice(8, 10)) || '…'} de cada mes, para confirmarlo con un toque.
+              Aparecerá en cada mes, el día {Number(fecha.slice(8, 10)) || '…'}, como «{tipo === 'gasto' ? 'por pagar' : 'por recibir'}»
+              hasta ese día. Lo confirmas con un toque.
             </small>
           </span>
         </label>

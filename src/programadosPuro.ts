@@ -1,19 +1,24 @@
-// Cómo se mantienen al día los gastos programados (cuotas de deudas y de ahorros que la app crea sola).
+// Cómo se mantienen al día los movimientos programados: las cuotas de deudas y de ahorros y los movimientos
+// recurrentes (gastos e ingresos fijos) que la app crea sola para los próximos meses.
 // Es código puro (sin pantalla ni base de datos), así se puede probar solo.
 
-export type OrigenProgramado = 'deuda' | 'ahorro'
+export type OrigenProgramado = 'deuda' | 'ahorro' | 'recurrente'
+export type TipoProgramado = 'gasto' | 'ingreso'
 
-/** Un gasto programado que debería existir según las deudas y ahorros de hoy. */
+/** Un movimiento programado que debería existir según las deudas, ahorros y recurrentes de hoy. */
 export interface Deseada {
   clave: string
   origen: OrigenProgramado
   refId: number
   fechaCuota: string
+  tipo: TipoProgramado
   monto: number
   nota: string
+  /** Solo los recurrentes traen su categoría; las cuotas de deudas y ahorros usan la categoría propia de cada una. */
+  categoriaId?: number
 }
 
-/** Un gasto programado que ya existe en los movimientos. */
+/** Un movimiento programado que ya existe en los movimientos. */
 export interface Existente {
   id: number
   clave: string
@@ -36,10 +41,10 @@ export function claveProgramado(origen: OrigenProgramado, refId: number, fechaCu
 /**
  * Compara lo que debería existir con lo que existe y dice qué crear, actualizar y borrar.
  *  - Lo que falta se crea.
- *  - Lo que sobra (la deuda se pagó, la meta se cerró, cambió el día…) se borra.
+ *  - Lo que sobra (la deuda se pagó, la meta se cerró, cambió el día, se pausó el recurrente…) se borra.
  *  - Si el plan cambió el monto, se actualiza, salvo que la persona ya lo haya editado a mano (su monto es distinto
  *    del que puso el plan): entonces se respeta lo que escribió.
- *  - Nunca hay dos gastos programados para la misma cuota.
+ *  - Nunca hay dos movimientos programados para la misma cuota.
  */
 export function planificarCambios(deseadas: Deseada[], existentes: Existente[]): Cambios {
   const cambios: Cambios = { crear: [], actualizar: [], borrar: [] }
@@ -70,4 +75,25 @@ export function planificarCambios(deseadas: Deseada[], existentes: Existente[]):
   }
   for (const [clave, e] of porClave) if (!vistas.has(clave)) cambios.borrar.push(e.id)
   return cambios
+}
+
+/** Cuántos meses hacia adelante se crean los movimientos programados (además del mes en curso). */
+export const MESES_POR_ADELANTADO = 24
+
+/** Último día del mes que queda `meses` meses después de la fecha dada (AAAA-MM-DD). */
+export function limiteDeProgramacion(hoy: string, meses: number): string {
+  const [a, m] = hoy.split('-').map(Number)
+  const total = a * 12 + (m - 1) + meses
+  const anio = Math.floor(total / 12)
+  const mes = (total % 12) + 1
+  const ultimo = new Date(anio, mes, 0).getDate()
+  return `${anio}-${String(mes).padStart(2, '0')}-${String(ultimo).padStart(2, '0')}`
+}
+
+/**
+ * ¿Sigue pendiente un movimiento? Lo está si es un programado sin confirmar o si su fecha todavía no llega.
+ * Así, un gasto con fecha futura no cuenta como pagado (ni un ingreso con fecha futura, como recibido).
+ */
+export function estaPendiente(movimiento: { fecha: string; programado?: unknown }, hoy: string): boolean {
+  return movimiento.programado !== undefined || movimiento.fecha > hoy
 }

@@ -1,19 +1,25 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
-import { useCompromisos } from '../compromisos'
+import { db, type Movimiento } from '../db'
+import { saldoActual } from '../deudas'
 import { fechaCorta, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { pesos } from '../formato'
 import { useResumenesJornadas } from '../fuentes'
-import { claveProgramado } from '../programadosPuro'
+import { estaPendiente } from '../programadosPuro'
 
-interface Fila {
-  clave: string
-  fecha: string
-  nombre: string
-  icono: string
-  monto: number
-  etiqueta: 'Deuda' | 'Ahorro' | 'Gasto fijo'
+type Etiqueta = 'Deuda' | 'Ahorro' | 'Gasto fijo' | 'Ingreso fijo' | 'Pendiente'
+
+function etiquetaDe(m: Movimiento): Etiqueta {
+  switch (m.programado?.origen) {
+    case 'deuda':
+      return 'Deuda'
+    case 'ahorro':
+      return 'Ahorro'
+    case 'recurrente':
+      return m.tipo === 'gasto' ? 'Gasto fijo' : 'Ingreso fijo'
+    default:
+      return 'Pendiente'
+  }
 }
 
 function cuando(fecha: string): string {
@@ -23,61 +29,53 @@ function cuando(fecha: string): string {
 }
 
 /**
- * Todo lo que falta por pagar en el mes (cuotas de deudas, ahorros y gastos fijos) y cuánto dinero te quedaría
- * después de pagarlo, sumando lo que ya recibiste y lo que aún falta por recibir.
+ * Lo que falta por pagar en el mes y cuánto dinero te quedaría después de pagarlo, sumando lo que ya recibiste y lo que
+ * aún falta por recibir. Un movimiento está «por pagar» o «por recibir» si la app lo programó (cuotas de deudas y
+ * ahorros, gastos e ingresos fijos) y aún no lo confirmaste, o si lo registraste con una fecha que todavía no llega.
  */
 export default function PorPagar() {
   const [mes, setMes] = useState(mesDe(hoy()))
   const movimientos = useLiveQuery(() => db.movimientos.where('fecha').between(`${mes}-01`, `${mes}-32`).toArray(), [mes])
   const categorias = useLiveQuery(() => db.categorias.toArray())
   const trabajos = useResumenesJornadas(mes)
-  const compromisos = useCompromisos(mes)
+  const deudasSinDia = useLiveQuery(async () => {
+    const [deudas, pagos] = await Promise.all([db.deudas.toArray(), db.pagosDeuda.toArray()])
+    return deudas
+      .filter((d) => d.diaPago === undefined && saldoActual(d, pagos.filter((p) => p.deudaId === d.id)) > 0)
+      .map((d) => d.nombre)
+  })
 
-  if (!movimientos || !categorias || !trabajos || !compromisos) return null
+  if (!movimientos || !categorias || !trabajos || !deudasSinDia) return null
 
+  const hoyTexto = hoy()
   const categoria = (id: number) => categorias.find((c) => c.id === id)
-
-  // Lo que falta por pagar: gastos programados (la app los creó sola y se confirman el día del pago)…
-  const programados = movimientos.filter((m) => m.programado !== undefined && m.tipo === 'gasto')
-  const clavesProgramadas = new Set(
-    programados.map((m) => claveProgramado(m.programado!.origen, m.programado!.refId, m.programado!.fechaCuota)),
-  )
-  const filas: Fila[] = programados.map((m) => ({
-    clave: `m|${m.id}`,
-    fecha: m.fecha,
-    nombre: m.nota,
-    icono: categoria(m.categoriaId)?.icono ?? '🧾',
-    monto: m.monto,
-    etiqueta: m.programado!.origen === 'deuda' ? 'Deuda' : 'Ahorro',
-  }))
-  // …más lo que todavía no tiene gasto creado: gastos fijos recurrentes y cuotas de meses que aún no empiezan.
-  const aRecibir = compromisos.items.filter((c) => c.direccion === 'recibir')
-  for (const c of compromisos.items) {
-    if (c.direccion !== 'pagar' || clavesProgramadas.has(c.clave)) continue
-    filas.push({
-      clave: c.clave,
-      fecha: c.fecha,
-      nombre: c.nombre,
-      icono: c.icono,
-      monto: c.monto,
-      etiqueta: c.tipo === 'deuda' ? 'Deuda' : c.tipo === 'ahorro' ? 'Ahorro' : 'Gasto fijo',
-    })
-  }
-  filas.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.clave.localeCompare(b.clave))
-
-  // Ingresos: lo recibido (sin el trabajo por días, que va con su proyección) + lo que falta por recibir.
+  // Lo que genera el trabajo por días (Didi…) va con su proyección, no aquí.
   const idsDeJornadas = new Set(trabajos.flatMap((t) => t.idsMovimientos))
-  const recibido = movimientos.reduce((s, m) => (m.tipo === 'ingreso' && !idsDeJornadas.has(m.id!) ? s + m.monto : s), 0)
-  const porRecibir = aRecibir.reduce((s, c) => s + c.monto, 0)
+  const propios = movimientos.filter((m) => !idsDeJornadas.has(m.id!))
+
+  const porPagar = propios.filter((m) => m.tipo === 'gasto' && estaPendiente(m, hoyTexto)).sort(porFecha)
+  const porRecibir = propios.filter((m) => m.tipo === 'ingreso' && estaPendiente(m, hoyTexto)).sort(porFecha)
+  const pagados = propios.filter((m) => m.tipo === 'gasto' && !estaPendiente(m, hoyTexto)).sort(porFecha)
+  const recibidos = propios.filter((m) => m.tipo === 'ingreso' && !estaPendiente(m, hoyTexto))
+
+  const total = (lista: Movimiento[]) => lista.reduce((s, m) => s + m.monto, 0)
   const proyeccionTrabajos = trabajos.reduce((s, t) => s + t.proyeccion.proyectado, 0)
-  const ingresosProyectados = recibido + porRecibir + proyeccionTrabajos
-
-  const pagados = movimientos.filter((m) => m.tipo === 'gasto' && m.programado === undefined)
-  const gastosPagados = pagados.reduce((s, m) => s + m.monto, 0)
-  const porPagar = filas.reduce((s, f) => s + f.monto, 0)
-  const quedaria = ingresosProyectados - gastosPagados - porPagar
-
+  const ingresosProyectados = total(recibidos) + total(porRecibir) + proyeccionTrabajos
+  const quedaria = ingresosProyectados - total(pagados) - total(porPagar)
   const trabajosConProyeccion = trabajos.filter((t) => t.proyeccion.proyectado > 0)
+
+  const fila = (m: Movimiento, color: 'gasto' | 'ingreso') => (
+    <li key={m.id}>
+      <div className="fila-por-pagar">
+        <span className="icono-cat" aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
+        <span className="texto-mov">
+          <span>{m.nota || categoria(m.categoriaId)?.nombre || 'Movimiento'}</span>
+          <small>{cuando(m.fecha)} · {etiquetaDe(m)}</small>
+        </span>
+        <strong className={color}>{pesos(m.monto)}</strong>
+      </div>
+    </li>
+  )
 
   return (
     <>
@@ -95,7 +93,7 @@ export default function PorPagar() {
         <dl className="cuentas">
           <div>
             <dt>Ingresos ya recibidos</dt>
-            <dd className="ingreso">{pesos(recibido)}</dd>
+            <dd className="ingreso">{pesos(total(recibidos))}</dd>
           </div>
           {trabajosConProyeccion.map(({ fuente, proyeccion }) => (
             <div key={fuente.id}>
@@ -103,19 +101,19 @@ export default function PorPagar() {
               <dd className="ingreso">{pesos(proyeccion.proyectado)}</dd>
             </div>
           ))}
-          {porRecibir > 0 && (
+          {porRecibir.length > 0 && (
             <div>
-              <dt>Por recibir ({[...new Set(aRecibir.map((c) => c.nombre))].join(', ')})</dt>
-              <dd className="ingreso">{pesos(porRecibir)}</dd>
+              <dt>Por recibir ({[...new Set(porRecibir.map((m) => m.nota || 'ingreso'))].join(', ')})</dt>
+              <dd className="ingreso">{pesos(total(porRecibir))}</dd>
             </div>
           )}
           <div>
             <dt>Gastos ya pagados</dt>
-            <dd className="gasto">−{pesos(gastosPagados)}</dd>
+            <dd className="gasto">−{pesos(total(pagados))}</dd>
           </div>
           <div>
             <dt>Por pagar</dt>
-            <dd className="gasto">−{pesos(porPagar)}</dd>
+            <dd className="gasto">−{pesos(total(porPagar))}</dd>
           </div>
           <div className="total">
             <dt>Te quedaría</dt>
@@ -125,38 +123,31 @@ export default function PorPagar() {
       </section>
 
       <section>
-        <h3 className="subtitulo">Por pagar este mes ({filas.length})</h3>
-        {filas.length === 0 ? (
+        <h3 className="subtitulo">Por pagar este mes ({porPagar.length})</h3>
+        {porPagar.length === 0 ? (
           <div className="tarjeta vacia">
             <p>No tienes nada pendiente por pagar en {nombreMes(mes).toLowerCase()}. 🎉</p>
           </div>
         ) : (
-          <ul className="tarjeta lista por-pagar">
-            {filas.map((f) => (
-              <li key={f.clave}>
-                <div className="fila-por-pagar">
-                  <span className="icono-cat" aria-hidden="true">{f.icono}</span>
-                  <span className="texto-mov">
-                    <span>{f.nombre}</span>
-                    <small>{cuando(f.fecha)} · {f.etiqueta}</small>
-                  </span>
-                  <strong className="gasto">{pesos(f.monto)}</strong>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <ul className="tarjeta lista por-pagar">{porPagar.map((m) => fila(m, 'gasto'))}</ul>
         )}
         <p className="pequeno nota-pie">
-          Los pagos de deudas y ahorros ya están en tus gastos como «Programado». Confírmalos en Presupuesto → «Por
-          registrar» el día que pagues.
+          Aquí aparece todo gasto programado (deudas, ahorros y gastos fijos) o con fecha futura, hasta que llega su día. Las
+          cuotas se confirman en Presupuesto → «Por registrar» cuando pagas.
         </p>
       </section>
 
-      {compromisos.deudasSinDia.length > 0 && (
+      {porRecibir.length > 0 && (
+        <section>
+          <h3 className="subtitulo">Por recibir este mes ({porRecibir.length})</h3>
+          <ul className="tarjeta lista por-pagar">{porRecibir.map((m) => fila(m, 'ingreso'))}</ul>
+        </section>
+      )}
+
+      {deudasSinDia.length > 0 && (
         <p className="aviso-sin-dia">
-          ⚠️ {compromisos.deudasSinDia.join(', ')} no {compromisos.deudasSinDia.length === 1 ? 'tiene' : 'tienen'} día de
-          pago, así que no se {compromisos.deudasSinDia.length === 1 ? 'incluye' : 'incluyen'} aquí. Pon el día en Deudas →
-          Editar deuda.
+          ⚠️ {deudasSinDia.join(', ')} no {deudasSinDia.length === 1 ? 'tiene' : 'tienen'} día de pago, así que no se{' '}
+          {deudasSinDia.length === 1 ? 'incluye' : 'incluyen'} aquí. Pon el día en Deudas → Editar deuda.
         </p>
       )}
 
@@ -166,21 +157,23 @@ export default function PorPagar() {
           <p className="pequeno">Aún no has pagado nada este mes.</p>
         ) : (
           <ul className="lista-pagados">
-            {[...pagados]
-              .sort((a, b) => a.fecha.localeCompare(b.fecha))
-              .map((m) => (
-                <li key={m.id}>
-                  <span aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
-                  <span className="nombre">
-                    {categoria(m.categoriaId)?.nombre ?? 'Sin categoría'}
-                    <small>{fechaCorta(m.fecha)}{m.nota ? ` · ${m.nota}` : ''}</small>
-                  </span>
-                  <strong className="gasto">{pesos(m.monto)}</strong>
-                </li>
-              ))}
+            {pagados.map((m) => (
+              <li key={m.id}>
+                <span aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
+                <span className="nombre">
+                  {categoria(m.categoriaId)?.nombre ?? 'Sin categoría'}
+                  <small>{fechaCorta(m.fecha)}{m.nota ? ` · ${m.nota}` : ''}</small>
+                </span>
+                <strong className="gasto">{pesos(m.monto)}</strong>
+              </li>
+            ))}
           </ul>
         )}
       </details>
     </>
   )
+}
+
+function porFecha(a: Movimiento, b: Movimiento): number {
+  return a.fecha.localeCompare(b.fecha) || a.id! - b.id!
 }

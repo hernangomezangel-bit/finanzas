@@ -387,3 +387,6 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
 .monto-caja.calculado input { border-color: var(--acento); background: color-mix(in srgb, var(--acento) 10%, var(--fondo)); }
 .ayuda.automatico { color: var(--acento); font-weight: 600; }
 .monto-caja .unidad { font-size: 1rem; color: var(--suave); }
+
+/* Movimiento que aún no ocurre (por pagar o por recibir): se ve más tenue que los ya pagados. */
+.lista li.pendiente .icono-cat, .lista li.pendiente .texto-mov > span:first-child, .lista li.pendiente strong { opacity: 0.72; }

@@ -7,7 +7,7 @@ import Hoja from '../componentes/Hoja'
 
 export default function FormOcurrencia({ pendiente, alCerrar }: { pendiente: PendienteConDatos; alCerrar: () => void }) {
   const { recurrente, fecha } = pendiente
-  const [monto, setMonto] = useState(recurrente.monto)
+  const [monto, setMonto] = useState(pendiente.monto)
   const [recordar, setRecordar] = useState(false)
   const [error, setError] = useState('')
 

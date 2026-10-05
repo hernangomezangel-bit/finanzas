@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
-import { hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
+import { fechaCorta, hoy, mesDe, moverMes, nombreDia, nombreMes } from '../fechas'
 import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
+import { estaPendiente } from '../programadosPuro'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import PendientesJornadas from '../componentes/PendientesJornadas'
 import PorRegistrar from '../componentes/PorRegistrar'
@@ -63,12 +64,19 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   const dias = new Map<string, Movimiento[]>()
   for (const m of movimientos) dias.set(m.fecha, [...(dias.get(m.fecha) ?? []), m])
 
-  // Los gastos incluyen las cuotas programadas de deudas y ahorros (la app las crea sola). El balance suma, además,
-  // la proyección de los trabajos por días (si cumples la meta). La proyección completa, con lo que falta por
-  // recibir y por pagar de tus movimientos recurrentes, está en la pestaña «Por pagar».
+  // Los gastos incluyen lo que la app programó sola (cuotas de deudas y ahorros, gastos e ingresos fijos) y lo que
+  // registraste con fecha futura. Eso cuenta en el mes, pero todavía no está pagado ni recibido: se muestra aparte.
+  const hoyTexto = hoy()
+  const gastosPendientes = movimientos
+    .filter((m) => m.tipo === 'gasto' && estaPendiente(m, hoyTexto))
+    .reduce((s, m) => s + m.monto, 0)
+  const ingresosPendientes = movimientos
+    .filter((m) => m.tipo === 'ingreso' && !idsDeJornadas.has(m.id!) && estaPendiente(m, hoyTexto))
+    .reduce((s, m) => s + m.monto, 0)
+  // El balance suma, además, la proyección de los trabajos por días (si cumples la meta). La proyección completa
+  // y lo que falta por pagar están en la pestaña «Por pagar».
   const balance = ingresos + proyectadoVariables - gastos
   const balanceRegistrado = ingresosRegistrados - gastos
-  const programadosDelMes = movimientos.filter((m) => m.programado).reduce((s, m) => s + m.monto, 0)
 
   return (
     <>
@@ -86,6 +94,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
         <div className="tarjeta dato">
           <span>Ingresos</span>
           <strong className="ingreso">{pesos(ingresos)}</strong>
+          {ingresosPendientes > 0 && <small className="detalle-dato">Incluye {pesos(ingresosPendientes)} por recibir aún</small>}
           {recuadrosVariables.length > 0 && (
             <small className="detalle-dato">Sin {recuadrosVariables.map((t) => t.fuente.nombre).join(' ni ')}</small>
           )}
@@ -93,9 +102,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
         <div className="tarjeta dato">
           <span>Gastos</span>
           <strong className="gasto">{pesos(gastos)}</strong>
-          {programadosDelMes > 0 && (
-            <small className="detalle-dato">Incluye {pesos(programadosDelMes)} programados</small>
-          )}
+          {gastosPendientes > 0 && <small className="detalle-dato">Incluye {pesos(gastosPendientes)} por pagar aún</small>}
         </div>
         {recuadrosVariables.map(({ fuente, proyeccion }) => (
           <div key={fuente.id} className="tarjeta dato ancho">
@@ -115,7 +122,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
         <div className="tarjeta dato ancho">
           <span>Balance del mes</span>
           <strong className={balance < 0 ? 'gasto' : 'ingreso'}>{pesos(balance)}</strong>
-          {(recuadrosVariables.length > 0 || programadosDelMes > 0) && (
+          {(recuadrosVariables.length > 0 || gastosPendientes > 0 || ingresosPendientes > 0) && (
             <small className="detalle-dato">
               {recuadrosVariables.length > 0 && <>Incluye la proyección de {recuadrosVariables.map((t) => t.fuente.nombre).join(' y ')}. Con lo ya registrado hasta hoy: {pesos(balanceRegistrado)}. </>}
               Mira la pestaña «Por pagar» para ver lo que falta y cuánto te quedaría.
@@ -173,13 +180,23 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
               {lista.map((m) => {
                 const cat = porId.get(m.categoriaId)
                 return (
-                  <li key={m.id}>
+                  <li key={m.id} className={estaPendiente(m, hoyTexto) ? 'pendiente' : undefined}>
                     <button onClick={() => setFormulario({ movimiento: m })}>
                       <span className="icono-cat" aria-hidden="true">{cat?.icono ?? '🧾'}</span>
                       <span className="texto-mov">
                         <span>{cat?.nombre ?? 'Sin categoría'}</span>
                         {m.nota && <small>{m.nota}</small>}
-                        {m.programado && <small className="programado">Programado · se confirma el día del pago</small>}
+                        {m.programado ? (
+                          <small className="programado">
+                            {m.fecha > hoyTexto
+                              ? `Programado · ${m.tipo === 'gasto' ? 'por pagar' : 'por recibir'}`
+                              : 'Programado · confírmalo en «Por registrar»'}
+                          </small>
+                        ) : (
+                          m.fecha > hoyTexto && (
+                            <small className="programado">{m.tipo === 'gasto' ? 'Por pagar' : 'Por recibir'} el {fechaCorta(m.fecha)}</small>
+                          )
+                        )}
                       </span>
                       <strong className={m.tipo}>
                         {m.tipo === 'gasto' ? '−' : '+'}{pesos(m.monto)}

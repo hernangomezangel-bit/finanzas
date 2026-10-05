@@ -28,8 +28,9 @@ import type { TipoTasa } from './plan'
  * Versión 6: las deudas guardan desde cuándo se proponen sus cuotas, y los pagos pueden ser cuotas omitidas.
  * Versión 7: las metas de ahorro pueden ser un ahorro programado (cuota fija), y los aportes pueden ser cuotas omitidas.
  * Versión 8: los gastos pueden ser cuotas programadas de deudas o ahorros que la app creó sola.
+ * Versión 9: también los movimientos recurrentes (gastos e ingresos fijos) se programan por adelantado.
  */
-export const VERSION_RESPALDO = 8
+export const VERSION_RESPALDO = 9
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -371,7 +372,7 @@ function validarMovimiento(m: unknown, i: number, categoriasPorId: Map<number, C
 
 function validarProgramado(p: unknown, i: number): Programado {
   if (!esObjeto(p)) return falla(`El gasto programado ${i + 1} no tiene el formato esperado.`)
-  if (p.origen !== 'deuda' && p.origen !== 'ahorro') return falla(`El gasto programado ${i + 1} tiene un origen no válido.`)
+  if (p.origen !== 'deuda' && p.origen !== 'ahorro' && p.origen !== 'recurrente') return falla(`El movimiento programado ${i + 1} tiene un origen no válido.`)
   if (!esEntero(p.refId) || p.refId <= 0) return falla(`El gasto programado ${i + 1} tiene un dato no válido.`)
   if (!esFechaValida(p.fechaCuota)) return falla(`El gasto programado ${i + 1} tiene una fecha de cuota no válida.`)
   if (!esEntero(p.montoPlan) || p.montoPlan <= 0) return falla(`El gasto programado ${i + 1} tiene un monto no válido.`)
@@ -461,8 +462,10 @@ export async function leerRespaldo(archivo: File): Promise<Respaldo> {
   // Un gasto programado cuya deuda o meta no está en la copia ya no tiene de dónde venir: queda como un gasto normal.
   const deudasIds = new Set(deudas.map((d) => d.id!))
   const metasIds = new Set(metas.map((m) => m.id!))
+  const recurrentesIds = new Set(recurrentes.map((r) => r.id!))
+  const origenes = { deuda: deudasIds, ahorro: metasIds, recurrente: recurrentesIds }
   const movimientosFinales = movimientos.map(({ programado, ...resto }): Movimiento =>
-    programado && (programado.origen === 'deuda' ? deudasIds : metasIds).has(programado.refId) ? { ...resto, programado } : resto,
+    programado && origenes[programado.origen].has(programado.refId) ? { ...resto, programado } : resto,
   )
 
   return {
