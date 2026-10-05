@@ -41,16 +41,19 @@ export async function registrarVencimiento(
   await db.transaction('rw', db.movimientos, db.ocurrencias, db.recurrentes, async () => {
     // La app ya creó este movimiento (programado): se confirma ese mismo, sin crear uno segundo.
     const programado = await buscarProgramado('recurrente', recurrente.id!, fecha)
+    // Si se paga antes de su día, el movimiento queda con la fecha de hoy (con fecha futura seguiría «por pagar»).
+    // El vencimiento que se da por atendido sigue siendo el original.
+    const fechaMovimiento = fecha > hoy() ? hoy() : fecha
     let movimientoId: number
     if (programado) {
-      await db.movimientos.update(programado.id!, { monto, programado: undefined })
+      await db.movimientos.update(programado.id!, { monto, fecha: fechaMovimiento, programado: undefined })
       movimientoId = programado.id!
     } else {
       movimientoId = await db.movimientos.add({
         tipo: recurrente.tipo,
         monto,
         categoriaId: recurrente.categoriaId,
-        fecha,
+        fecha: fechaMovimiento,
         nota: recurrente.nota || recurrente.nombre,
       })
     }

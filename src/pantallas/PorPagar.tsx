@@ -1,13 +1,26 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, type Movimiento } from '../db'
-import { saldoActual } from '../deudas'
+import { db, type Deuda, type Meta, type Movimiento } from '../db'
+import { omitirCuotaAhorro } from '../ahorros'
+import { omitirCuota, saldoActual } from '../deudas'
 import { fechaCorta, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { pesos } from '../formato'
 import { useResumenesJornadas } from '../fuentes'
 import { estaPendiente } from '../programadosPuro'
+import type { PendienteConDatos } from '../recurrentes'
+import FormAporte from './FormAporte'
+import FormMarcarPagado from './FormMarcarPagado'
+import FormOcurrencia from './FormOcurrencia'
+import FormPago from './FormPago'
 
-type Etiqueta = 'Deuda' | 'Ahorro' | 'Gasto fijo' | 'Ingreso fijo' | 'Pendiente'
+/** El formulario de pago abierto: cada tipo de pendiente se registra con su propio formulario. */
+type Abierto =
+  | { tipo: 'deuda'; deuda: Deuda; saldo: number; movimiento: Movimiento }
+  | { tipo: 'ahorro'; meta: Meta; movimiento: Movimiento }
+  | { tipo: 'recurrente'; pendiente: PendienteConDatos }
+  | { tipo: 'suelto'; movimiento: Movimiento }
+
+type Etiqueta ='Deuda' | 'Ahorro' | 'Gasto fijo' | 'Ingreso fijo' | 'Pendiente'
 
 function etiquetaDe(m: Movimiento): Etiqueta {
   switch (m.programado?.origen) {
@@ -35,6 +48,7 @@ function cuando(fecha: string): string {
  */
 export default function PorPagar() {
   const [mes, setMes] = useState(mesDe(hoy()))
+  const [abierto, setAbierto] = useState<Abierto | null>(null)
   const movimientos = useLiveQuery(() => db.movimientos.where('fecha').between(`${mes}-01`, `${mes}-32`).toArray(), [mes])
   const categorias = useLiveQuery(() => db.categorias.toArray())
   const trabajos = useResumenesJornadas(mes)
@@ -46,6 +60,27 @@ export default function PorPagar() {
   })
 
   if (!movimientos || !categorias || !trabajos || !deudasSinDia) return null
+
+  /** Abre el formulario de pago que corresponde: el de la deuda, el del ahorro, el del fijo o el de un pendiente suelto. */
+  async function abrir(m: Movimiento) {
+    const p = m.programado
+    if (p?.origen === 'deuda') {
+      const [deuda, pagos] = await Promise.all([db.deudas.get(p.refId), db.pagosDeuda.where('deudaId').equals(p.refId).toArray()])
+      if (deuda) return setAbierto({ tipo: 'deuda', deuda, saldo: saldoActual(deuda, pagos), movimiento: m })
+    } else if (p?.origen === 'ahorro') {
+      const meta = await db.metas.get(p.refId)
+      if (meta) return setAbierto({ tipo: 'ahorro', meta, movimiento: m })
+    } else if (p?.origen === 'recurrente') {
+      const recurrente = await db.recurrentes.get(p.refId)
+      if (recurrente) {
+        return setAbierto({
+          tipo: 'recurrente',
+          pendiente: { recurrenteId: p.refId, fecha: p.fechaCuota, recurrente, monto: m.monto },
+        })
+      }
+    }
+    setAbierto({ tipo: 'suelto', movimiento: m })
+  }
 
   const hoyTexto = hoy()
   const categoria = (id: number) => categorias.find((c) => c.id === id)
@@ -66,14 +101,18 @@ export default function PorPagar() {
 
   const fila = (m: Movimiento, color: 'gasto' | 'ingreso') => (
     <li key={m.id}>
-      <div className="fila-por-pagar">
+      <button
+        className="fila-por-pagar fila-toca"
+        onClick={() => void abrir(m)}
+        aria-label={`${color === 'gasto' ? 'Pagar' : 'Registrar'} ${m.nota || categoria(m.categoriaId)?.nombre || 'movimiento'}`}
+      >
         <span className="icono-cat" aria-hidden="true">{categoria(m.categoriaId)?.icono ?? '🧾'}</span>
         <span className="texto-mov">
           <span>{m.nota || categoria(m.categoriaId)?.nombre || 'Movimiento'}</span>
           <small>{cuando(m.fecha)} · {etiquetaDe(m)}</small>
         </span>
         <strong className={color}>{pesos(m.monto)}</strong>
-      </div>
+      </button>
     </li>
   )
 
@@ -132,8 +171,8 @@ export default function PorPagar() {
           <ul className="tarjeta lista por-pagar">{porPagar.map((m) => fila(m, 'gasto'))}</ul>
         )}
         <p className="pequeno nota-pie">
-          Aquí aparece todo gasto programado (deudas, ahorros y gastos fijos) o con fecha futura, hasta que llega su día. Las
-          cuotas se confirman en Presupuesto → «Por registrar» cuando pagas.
+          Toca un pago para registrarlo ya, aunque todavía no sea su día. Aquí aparece todo gasto programado (deudas, ahorros
+          y gastos fijos) o con fecha futura, hasta que lo pagas.
         </p>
       </section>
 
@@ -149,6 +188,34 @@ export default function PorPagar() {
           ⚠️ {deudasSinDia.join(', ')} no {deudasSinDia.length === 1 ? 'tiene' : 'tienen'} día de pago, así que no se{' '}
           {deudasSinDia.length === 1 ? 'incluye' : 'incluyen'} aquí. Pon el día en Deudas → Editar deuda.
         </p>
+      )}
+
+      {abierto?.tipo === 'deuda' && (
+        <FormPago
+          deuda={abierto.deuda}
+          saldo={abierto.saldo}
+          montoSugerido={abierto.movimiento.monto}
+          fechaCuota={abierto.movimiento.programado!.fechaCuota}
+          alOmitir={() => omitirCuota(abierto.deuda, abierto.movimiento.programado!.fechaCuota)}
+          alCerrar={() => setAbierto(null)}
+        />
+      )}
+      {abierto?.tipo === 'ahorro' && (
+        <FormAporte
+          meta={abierto.meta}
+          montoInicial={abierto.movimiento.monto}
+          fechaCuota={abierto.movimiento.programado!.fechaCuota}
+          alOmitir={() => omitirCuotaAhorro(abierto.meta, abierto.movimiento.programado!.fechaCuota)}
+          alCerrar={() => setAbierto(null)}
+        />
+      )}
+      {abierto?.tipo === 'recurrente' && <FormOcurrencia pendiente={abierto.pendiente} alCerrar={() => setAbierto(null)} />}
+      {abierto?.tipo === 'suelto' && (
+        <FormMarcarPagado
+          movimiento={abierto.movimiento}
+          nombre={abierto.movimiento.nota || categoria(abierto.movimiento.categoriaId)?.nombre || 'Movimiento'}
+          alCerrar={() => setAbierto(null)}
+        />
       )}
 
       <details className="tarjeta">
