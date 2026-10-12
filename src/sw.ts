@@ -23,7 +23,7 @@ function revisar(): Promise<number> {
     self.registration.showNotification(aviso.titulo, {
       body: aviso.texto,
       tag: aviso.clave,
-      icon: 'icon-192.png',
+      icon: aviso.icono ?? 'icon-192.png',
       badge: 'icon-192.png',
     }),
   )

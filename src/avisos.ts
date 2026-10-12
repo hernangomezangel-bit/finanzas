@@ -36,6 +36,8 @@ export interface Aviso {
   clave: string
   titulo: string
   texto: string
+  /** Imagen de la notificación (relativa a la app); si falta, el ícono de la app. */
+  icono?: string
 }
 
 function lineas(pagos: Pago[]): string {
@@ -106,6 +108,7 @@ export function avisosTico(pendientes: Pago[], hoy: string, dias: number[]): Avi
       avisos.push({
         clave: `tico|${hoy}|${p.id}|${d}`,
         titulo: 'Tico',
+        icono: 'tico/aviso.png',
         texto: rellenar(MENSAJES.REC_03.texto, { cuando: cuandoVence(d), categoria: nombreEnFrase(p.nombre), monto: montoTico(p.monto) }),
       })
     }

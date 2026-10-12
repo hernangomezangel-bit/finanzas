@@ -15,7 +15,8 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      includeAssets: ['favicon.svg'],
+      // Las imágenes de Tico se guardan también para que se vean sin internet.
+      includeAssets: ['favicon.svg', 'tico/*.svg', 'tico/*.png'],
       manifest: {
         name: 'Mis Finanzas',
         short_name: 'Finanzas',

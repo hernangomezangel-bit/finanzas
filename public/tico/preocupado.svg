@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Tico, preocupado">
+
+  <path d="M95 400 C60 430 55 470 70 490 C110 470 150 440 165 410 Z" fill="#1e293b"/>
+  <ellipse cx="238" cy="335" rx="128" ry="148" fill="#1e293b"/>
+  <circle cx="240" cy="195" r="98" fill="#1e293b"/>
+  <ellipse cx="214" cy="345" rx="80" ry="104" fill="#fde68a"/>
+  <ellipse cx="218" cy="262" rx="62" ry="28" fill="#f8fafc"/>
+  <path d="M188 470 q-4 22 -30 22 q14 -8 12 -24 z M262 472 q-4 22 -30 22 q14 -8 12 -24 z" fill="#fb923c"/>
+  <ellipse cx="190" cy="484" rx="34" ry="12" fill="#fb923c"/>
+  <ellipse cx="262" cy="486" rx="34" ry="12" fill="#fb923c"/>
+
+    
+  <g transform="rotate(62 198 345)">
+    <ellipse cx="198" cy="345" rx="34" ry="86" fill="#0f172a"/>
+    <ellipse cx="188.48" cy="345" rx="7.48" ry="67.08" fill="#334155"/>
+  </g>
+    
+  <g transform="rotate(-62 238 350)">
+    <ellipse cx="238" cy="350" rx="34" ry="86" fill="#0f172a"/>
+    <ellipse cx="228.48" cy="350" rx="7.48" ry="67.08" fill="#334155"/>
+  </g>
+    
+  <circle cx="268" cy="176" r="31" fill="#f8fafc" stroke="#38bdf8" stroke-width="10"/>
+  <circle cx="270" cy="180" r="13" fill="#0f172a"/>
+  <circle cx="274" cy="175" r="4.5" fill="#f8fafc"/>
+    <path d="M236 152 Q262 140 296 118" fill="none" stroke="#0f172a" stroke-width="9" stroke-linecap="round"/>
+    
+  <path d="M300 218 C372 226 436 228 464 238 C436 276 372 276 302 252 Z" fill="#f97316" stroke="#7c2d12" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M296 138 C376 116 452 138 486 192 C452 210 376 218 298 214 Z" fill="#fbbf24" stroke="#7c2d12" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M330 150 C390 140 440 156 462 186 C430 182 380 184 330 190 Z" fill="#f97316" opacity="0.55"/>
+  <path d="M452 150 C474 160 484 178 486 192 C476 200 462 204 450 206 C458 186 458 168 452 150 Z" fill="#dc2626"/>
+  <path d="M300 220 C370 214 430 214 466 232" fill="none" stroke="#7c2d12" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="330" cy="168" r="5" fill="#7c2d12"/>
+    <path d="M182 108 C170 128 162 140 162 152 C162 166 172 174 182 174 C192 174 202 166 202 152 C202 140 194 128 182 108 Z" fill="#38bdf8" stroke="#0284c7" stroke-width="4"/>
+</svg>
