@@ -10,6 +10,9 @@ import { Fin, RecordatorioCuando, RecordatorioPregunta } from './asistente/Cierr
 import { GastosDia, GastosLista, GastosMonto, GastosTotal, VariablesSugiere } from './asistente/Gastos'
 import { Bienvenida, ParaQuien, ParaQuienFamilia, Reemplazo } from './asistente/Inicio'
 import {
+  IngresoDiaLibres,
+  IngresoDiaMeta,
+  IngresoDiaNombre,
   IngresoConsejo,
   IngresoFrecuencia,
   IngresoMonto,
@@ -37,6 +40,9 @@ const PANTALLAS: Record<Pantalla, ComponentType<PropsPantalla>> = {
   ING_CONSEJO: IngresoConsejo,
   ING_OTRO: IngresoOtro,
   ING_TOTAL: IngresoTotal,
+  ING_DIA_NOMBRE: IngresoDiaNombre,
+  ING_DIA_META: IngresoDiaMeta,
+  ING_DIA_LIBRES: IngresoDiaLibres,
   FIJ_LISTA: (p) => <GastosLista {...p} tipo="fijos" />,
   FIJ_MONTO: (p) => <GastosMonto {...p} tipo="fijos" />,
   FIJ_DIA: GastosDia,

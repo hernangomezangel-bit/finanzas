@@ -5,6 +5,7 @@ import { eliminarMeta } from '../ahorros'
 import { guardarConfigAvisos } from '../avisosDatos'
 import { db, type Categoria, type PresupuestoTico } from '../db'
 import { hoy } from '../fechas'
+import { eliminarFuente } from '../fuentes'
 import { eliminarRecurrente } from '../recurrentes'
 import type { PlanPresupuesto } from './presupuesto'
 
@@ -28,17 +29,25 @@ async function categoriaPorNombre(nombre: string, tipo: Categoria['tipo'], icono
  * Quita lo que Tico creó antes. Los gastos e ingresos que ya se confirmaron se conservan. Una meta a la que la persona
  * ya le hizo aportes no se borra (sería perder su historial): queda como suya y se devuelve su nombre para no duplicarla.
  */
-async function quitarLoAnterior(anterior: PresupuestoTico): Promise<Set<string>> {
+async function quitarLoAnterior(anterior: PresupuestoTico): Promise<Map<string, number>> {
   for (const id of anterior.recurrenteIds) await eliminarRecurrente(id)
-  const conservadas = new Set<string>()
+  // Lo que se conserva, por nombre (las metas tal cual; los trabajos por días con el prefijo «fuente|»), con su id.
+  const conservadas = new Map<string, number>()
   for (const id of anterior.metaIds) {
     const meta = await db.metas.get(id)
     if (!meta) continue
     const aportes = await db.aportes.where('metaId').equals(id).toArray()
-    if (aportes.some((a) => !a.omitida && a.monto > 0)) conservadas.add(meta.nombre.toLowerCase())
+    if (aportes.some((a) => !a.omitida && a.monto > 0)) conservadas.set(meta.nombre.toLowerCase(), id)
     else await eliminarMeta(id)
   }
   for (const id of anterior.categoriasConTope) await db.categorias.update(id, { tope: undefined })
+  // Un trabajo por días con días ya anotados (trabajó o descansó) es historial de la persona: se conserva igual.
+  for (const id of anterior.fuenteIds ?? []) {
+    const fuente = await db.fuentes.get(id)
+    if (!fuente) continue
+    if ((await db.jornadas.where('fuenteId').equals(id).count()) > 0) conservadas.set(`fuente|${fuente.nombre.toLowerCase()}`, id)
+    else await eliminarFuente(id)
+  }
   return conservadas
 }
 
@@ -47,9 +56,9 @@ async function quitarLoAnterior(anterior: PresupuestoTico): Promise<Set<string>>
  * Todo ocurre en una sola operación: o queda completo o no cambia nada. Se puede llamar más de una vez con el mismo plan.
  */
 export async function crearPresupuestoTico(plan: PlanPresupuesto, avisos: { diasAntes: number } | null): Promise<void> {
-  await db.transaction('rw', [db.categorias, db.recurrentes, db.ocurrencias, db.metas, db.aportes, db.movimientos, db.ajustes], async () => {
+  await db.transaction('rw', [db.categorias, db.recurrentes, db.ocurrencias, db.metas, db.aportes, db.movimientos, db.ajustes, db.fuentes, db.jornadas], async () => {
     const anterior = await leerPresupuestoTico()
-    const metasConservadas = anterior ? await quitarLoAnterior(anterior) : new Set<string>()
+    const conservadas = anterior ? await quitarLoAnterior(anterior) : new Map<string, number>()
 
     const categoriaIds = new Map<string, number>()
     for (const c of plan.categorias) categoriaIds.set(`${c.tipo}|${c.nombre.toLowerCase()}`, await categoriaPorNombre(c.nombre, c.tipo, c.icono, c.variable))
@@ -74,9 +83,35 @@ export async function crearPresupuestoTico(plan: PlanPresupuesto, avisos: { dias
       )
     }
 
+    const fuenteIds: number[] = []
+    for (const f of plan.fuentes) {
+      const existente = conservadas.get(`fuente|${f.nombre.toLowerCase()}`)
+      if (existente !== undefined) {
+        // Ya tiene días anotados: se queda con su historial, y solo se le ponen la meta y los descansos nuevos.
+        await db.fuentes.update(existente, { metaDiaria: f.metaDiaria, diasLibres: f.diasLibres })
+        fuenteIds.push(existente)
+        continue
+      }
+      fuenteIds.push(
+        await db.fuentes.add({
+          nombre: f.nombre,
+          metaDiaria: f.metaDiaria,
+          categoriaId: idDe('ingreso', f.categoria),
+          diasLibres: f.diasLibres,
+          creado: hoy(),
+          activo: true,
+        }),
+      )
+    }
+
     const metaIds: number[] = []
     for (const m of plan.metas) {
-      if (metasConservadas.has(m.nombre.toLowerCase())) continue
+      const existente = conservadas.get(m.nombre.toLowerCase())
+      if (existente !== undefined) {
+        // Ya tiene aportes: se queda como está (sus montos son los de la persona), pero Tico la sigue contando como suya.
+        metaIds.push(existente)
+        continue
+      }
       metaIds.push(
         await db.metas.add({
           nombre: m.nombre,
@@ -90,7 +125,7 @@ export async function crearPresupuestoTico(plan: PlanPresupuesto, avisos: { dias
       )
     }
 
-    await db.ajustes.put({ clave: 'asistentePresupuesto', valor: { creadoEn: hoy(), para: plan.para, recurrenteIds, metaIds, categoriasConTope } })
+    await db.ajustes.put({ clave: 'asistentePresupuesto', valor: { creadoEn: hoy(), para: plan.para, recurrenteIds, metaIds, fuenteIds, categoriasConTope } })
     if (avisos) await guardarConfigAvisos({ dias: [avisos.diasAntes], estiloTico: true })
   })
 }

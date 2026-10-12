@@ -80,6 +80,7 @@ export function RecordatorioCuando({ borrador, cambiar, ir }: PropsPantalla) {
 function Creado({ plan }: { plan: PlanPresupuesto }) {
   const lineas = [
     plan.ingresos.length > 0 && `${plan.ingresos.length} ${plan.ingresos.length === 1 ? 'ingreso fijo' : 'ingresos fijos'}`,
+    plan.fuentes.length > 0 && `${plan.fuentes.length} ${plan.fuentes.length === 1 ? 'trabajo por días' : 'trabajos por días'} con meta diaria`,
     plan.fijos.length > 0 && `${plan.fijos.length} ${plan.fijos.length === 1 ? 'gasto fijo' : 'gastos fijos'}`,
     plan.topes.length > 0 && `${plan.topes.length} ${plan.topes.length === 1 ? 'límite mensual' : 'límites mensuales'} por categoría`,
     plan.metas.length > 0 && `${plan.metas.length} ${plan.metas.length === 1 ? 'meta de ahorro' : 'metas de ahorro'}`,

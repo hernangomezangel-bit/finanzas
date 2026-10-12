@@ -387,10 +387,16 @@ function validarAjuste(a: unknown, i: number): Ajuste {
   if (a.clave === 'asistentePresupuesto' && esObjeto(a.valor)) {
     const v = a.valor
     const ids = (x: unknown): x is number[] => Array.isArray(x) && x.every((n) => esEntero(n) && n > 0)
-    if (esFechaValida(v.creadoEn) && (v.para === 'personal' || v.para === 'familiar') && ids(v.recurrenteIds) && ids(v.metaIds) && ids(v.categoriasConTope)) {
+    if (
+      esFechaValida(v.creadoEn) && (v.para === 'personal' || v.para === 'familiar') && ids(v.recurrenteIds) && ids(v.metaIds) &&
+      ids(v.categoriasConTope) && (v.fuenteIds === undefined || ids(v.fuenteIds))
+    ) {
       return {
         clave: 'asistentePresupuesto',
-        valor: { creadoEn: v.creadoEn, para: v.para, recurrenteIds: v.recurrenteIds, metaIds: v.metaIds, categoriasConTope: v.categoriasConTope },
+        valor: {
+          creadoEn: v.creadoEn, para: v.para, recurrenteIds: v.recurrenteIds, metaIds: v.metaIds, categoriasConTope: v.categoriasConTope,
+          ...(v.fuenteIds ? { fuenteIds: v.fuenteIds } : {}),
+        },
       }
     }
   }

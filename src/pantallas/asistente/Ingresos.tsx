@@ -2,10 +2,18 @@ import { useState } from 'react'
 import { ingresosActivos } from '../../asistente/borrador'
 import { esIngresoCompleto, mensualDe, nombreEnFrase, totalIngresosMensual, type FrecuenciaIngreso } from '../../asistente/ingresos'
 import { mensaje, monto } from '../../asistente/mensajes'
-import { ETIQUETAS, OPCIONES_FRECUENCIA, OPCIONES_INGRESO } from '../../asistente/textos'
+import { DIAS_SEMANA, ETIQUETAS, OPCIONES_FRECUENCIA, OPCIONES_INGRESO } from '../../asistente/textos'
 import CampoMonto from '../../componentes/CampoMonto'
 import { GloboTico } from '../../componentes/Tico'
 import type { PropsPantalla } from './tipos'
+
+/** «descansas lun y dom» o «trabajas todos los días». */
+function textoDescansos(libres: number[]): string {
+  if (libres.length === 0) return ETIQUETAS.resumenSinDescanso
+  const nombres = DIAS_SEMANA.filter((d) => libres.includes(d.n)).map((d) => d.etiqueta.toLowerCase())
+  const lista = nombres.length <= 1 ? nombres.join('') : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+  return ETIQUETAS.resumenDescansas.replace('{dias}', lista)
+}
 
 /** El ingreso que se está respondiendo ahora. */
 function actual({ borrador }: PropsPantalla) {
@@ -22,13 +30,19 @@ export function IngresoTipo(props: PropsPantalla) {
 
   function elegir(id: string, etiqueta: string) {
     if (id === 'otro') return setOtro(true)
-    editarIngreso({ tipo: id, etiqueta })
+    if (id === 'dia') {
+      // Un trabajo por días tiene sus propias preguntas: nombre, meta de cada día y días de descanso. Siempre cambia de un día a otro.
+      editarIngreso({ tipo: 'dia', etiqueta: ingreso.tipo === 'dia' ? (ingreso.etiqueta ?? '') : '', frecuencia: 'diaria', variable: true })
+      return ir('ING_DIA_NOMBRE')
+    }
+    // Si antes había elegido un trabajo por días y cambia de idea, se limpia lo propio de ese tipo.
+    editarIngreso({ tipo: id, etiqueta, ...(ingreso.tipo === 'dia' ? { frecuencia: undefined, variable: undefined, diasLibres: undefined, monto: undefined } : {}) })
     ir('ING_MONTO')
   }
 
   function continuarConOtro() {
     if (!texto.trim()) return setError(true)
-    editarIngreso({ tipo: 'otro', etiqueta: texto.trim() })
+    editarIngreso({ tipo: 'otro', etiqueta: texto.trim(), ...(ingreso.tipo === 'dia' ? { frecuencia: undefined, variable: undefined, diasLibres: undefined, monto: undefined } : {}) })
     ir('ING_MONTO')
   }
 
@@ -153,7 +167,121 @@ export function IngresoQuien(props: PropsPantalla) {
           className="boton primario"
           onClick={() => {
             editarIngreso({ quien: texto.trim() })
-            ir('ING_VAR')
+            // Un trabajo por días ya se sabe que cambia: pasa directo al consejo.
+            ir(actual(props).tipo === 'dia' ? 'ING_CONSEJO' : 'ING_VAR')
+          }}
+        >
+          {ETIQUETAS.continuar}
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** Paso 3 · Trabajo por días: ¿cómo se llama? */
+export function IngresoDiaNombre(props: PropsPantalla) {
+  const { editarIngreso, ir } = props
+  const [texto, setTexto] = useState(actual(props).etiqueta ?? '')
+  const [error, setError] = useState(false)
+  return (
+    <>
+      <GloboTico mensaje={mensaje('ING_09')} />
+      <div className="respuesta-tico">
+        <label className="campo">
+          {ETIQUETAS.trabajoNombre}
+          <input
+            type="text"
+            maxLength={40}
+            autoFocus
+            placeholder={ETIQUETAS.trabajoEjemplo}
+            value={texto}
+            onChange={(e) => {
+              setTexto(e.target.value)
+              setError(false)
+            }}
+          />
+        </label>
+        {error && <p className="aviso-tico" role="alert">{mensaje('VAL_01').texto}</p>}
+        <button
+          className="boton primario"
+          onClick={() => {
+            if (!texto.trim()) return setError(true)
+            editarIngreso({ etiqueta: texto.trim() })
+            ir('ING_DIA_META')
+          }}
+        >
+          {ETIQUETAS.continuar}
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** Paso 3 · Trabajo por días: ¿cuánto quiere ganar cada día? */
+export function IngresoDiaMeta(props: PropsPantalla) {
+  const { editarIngreso, ir } = props
+  const ingreso = actual(props)
+  const [tocado, setTocado] = useState(false)
+  const [error, setError] = useState<'VAL_01' | 'VAL_02' | null>(null)
+  const valor = ingreso.monto ?? 0
+  return (
+    <>
+      <GloboTico mensaje={mensaje('ING_10', { tipo_ingreso: nombreEnFrase(ingreso) })} />
+      <div className="respuesta-tico">
+        <CampoMonto
+          etiqueta={ETIQUETAS.metaDiaria}
+          valor={valor}
+          autoFocus
+          alCambiar={(v) => {
+            setTocado(true)
+            setError(null)
+            editarIngreso({ monto: v })
+          }}
+        />
+        {error && <p className="aviso-tico" role="alert">{mensaje(error).texto}</p>}
+        <button
+          className="boton primario"
+          onClick={() => {
+            if (valor <= 0) return setError(tocado ? 'VAL_02' : 'VAL_01')
+            ir('ING_DIA_LIBRES')
+          }}
+        >
+          {ETIQUETAS.continuar}
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** Paso 3 · Trabajo por días: ¿qué días de la semana descansa? */
+export function IngresoDiaLibres(props: PropsPantalla) {
+  const { borrador, editarIngreso, ir } = props
+  const libres = actual(props).diasLibres ?? []
+  const [error, setError] = useState(false)
+  const alternar = (dia: number) => {
+    setError(false)
+    editarIngreso({ diasLibres: libres.includes(dia) ? libres.filter((d) => d !== dia) : [...libres, dia] })
+  }
+  return (
+    <>
+      <GloboTico mensaje={mensaje('ING_11')} />
+      <div className="respuesta-tico">
+        <div className="chips" role="group" aria-label="Días de descanso">
+          {DIAS_SEMANA.map((d) => (
+            <button key={d.n} className={libres.includes(d.n) ? 'chip activo' : 'chip'} aria-pressed={libres.includes(d.n)} onClick={() => alternar(d.n)}>
+              {d.etiqueta}
+            </button>
+          ))}
+        </div>
+        <p className="ayuda">{ETIQUETAS.diasLibresAyuda}</p>
+        {error && <p className="aviso-tico" role="alert">{ETIQUETAS.diasLibresTodos}</p>}
+        <button
+          className="boton primario"
+          onClick={() => {
+            if (libres.length >= 7) return setError(true)
+            // Aunque no marque ningún día, queda guardado que respondió (sin descansos).
+            editarIngreso({ diasLibres: [...libres].sort((a, b) => a - b) })
+            ir(borrador.para === 'familiar' ? 'ING_QUIEN' : 'ING_CONSEJO')
           }}
         >
           {ETIQUETAS.continuar}
@@ -238,11 +366,18 @@ export function IngresoTotal({ borrador, ir }: PropsPantalla) {
                   <small className="detalle">
                     {i.frecuencia === 'quincenal'
                       ? ETIQUETAS.resumenQuincenal.replace('{monto}', monto(i.monto))
-                      : ETIQUETAS.resumenSemanal.replace('{monto}', monto(i.monto))}
+                      : i.frecuencia === 'semanal'
+                        ? ETIQUETAS.resumenSemanal.replace('{monto}', monto(i.monto))
+                        : `${ETIQUETAS.resumenPorDia.replace('{monto}', monto(i.monto))} · ${textoDescansos(i.diasLibres ?? [])}`}
                   </small>
                 )}
               </span>
-              <strong>{ETIQUETAS.resumenAlMes.replace('{monto}', monto(mensualDe(i.monto, i.frecuencia)))}</strong>
+              <strong>
+                {(i.frecuencia === 'diaria' ? ETIQUETAS.resumenPromedio : ETIQUETAS.resumenAlMes).replace(
+                  '{monto}',
+                  monto(mensualDe(i.monto, i.frecuencia, i.diasLibres)),
+                )}
+              </strong>
             </li>
           ))}
           <li className="total">

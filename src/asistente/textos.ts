@@ -28,6 +28,10 @@ export const MENSAJES = {
   ING_06: { expresion: 'explicando', texto: 'Consejo: usa el valor de tu mes más flojo. Si un mes entra más, ¡mejor!' },
   ING_07: { expresion: 'feliz', texto: '¿Tienes otro ingreso?' },
   ING_08: { expresion: 'celebrando', texto: '¡Listo! En total entran {total_ingresos} al mes.' },
+  // Trabajos por días (Didi, domicilios…): se preguntan en lugar de ING_02 a ING_05.
+  ING_09: { expresion: 'explicando', texto: '¿Cómo se llama ese trabajo?' },
+  ING_10: { expresion: 'explicando', texto: '¿Cuánto quieres ganar cada día que trabajes en {tipo_ingreso}?' },
+  ING_11: { expresion: 'explicando', texto: '¿Qué días de la semana descansas?' },
 
   // Paso 4 · Gastos fijos
   FIJ_01: { expresion: 'explicando', texto: 'Ahora los gastos fijos: los que pagas cada mes casi por el mismo valor. Marca los que tienes.' },
@@ -118,6 +122,15 @@ export const ETIQUETAS = {
   // Paso 3
   ingresoOtroNombre: 'Escribe de dónde viene',
   ingresoOtroEjemplo: 'Ej: Venta de comida',
+  trabajoNombre: 'Nombre del trabajo',
+  trabajoEjemplo: 'Ej: Didi',
+  metaDiaria: 'Meta por día trabajado',
+  diasLibresAyuda: 'Toca los días que descansas. Si trabajas todos, déjalos sin marcar.',
+  diasLibresTodos: 'Deja al menos un día de trabajo a la semana.',
+  resumenPorDia: '{monto} por día',
+  resumenDescansas: 'descansas {dias}',
+  resumenSinDescanso: 'trabajas todos los días',
+  resumenPromedio: '{monto} al mes (promedio)',
   quienEtiqueta: 'Quién lo recibe (opcional)',
   quienEjemplo: 'Ej: Papá',
   montoEtiqueta: 'Monto al mes',
@@ -181,7 +194,19 @@ export const OPCIONES_INGRESO = [
   { id: 'independiente', etiqueta: 'Trabajo independiente' },
   { id: 'arriendo', etiqueta: 'Arriendo que recibo' },
   { id: 'pension', etiqueta: 'Pensión' },
+  { id: 'dia', etiqueta: 'Trabajo por días (Didi, domicilios…)' },
   { id: 'otro', etiqueta: 'Otro' },
+]
+
+/** Los días de la semana para marcar los de descanso, con el lunes primero. `n` es el número del día (0 = domingo). */
+export const DIAS_SEMANA = [
+  { n: 1, etiqueta: 'Lun' },
+  { n: 2, etiqueta: 'Mar' },
+  { n: 3, etiqueta: 'Mié' },
+  { n: 4, etiqueta: 'Jue' },
+  { n: 5, etiqueta: 'Vie' },
+  { n: 6, etiqueta: 'Sáb' },
+  { n: 0, etiqueta: 'Dom' },
 ]
 
 /** Gastos fijos (Paso 4): los que se pagan cada mes casi por el mismo valor. `otro` abre un campo de texto. */

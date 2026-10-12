@@ -196,6 +196,8 @@ export interface PresupuestoTico {
   para: 'personal' | 'familiar'
   recurrenteIds: number[]
   metaIds: number[]
+  /** Trabajos por días (meta diaria) que creó el asistente; los presupuestos anteriores no lo tienen. */
+  fuenteIds?: number[]
   /** Categorías a las que el asistente les puso un tope mensual. */
   categoriasConTope: number[]
 }

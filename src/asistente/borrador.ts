@@ -17,6 +17,9 @@ export type Pantalla =
   | 'ING_CONSEJO'
   | 'ING_OTRO'
   | 'ING_TOTAL'
+  | 'ING_DIA_NOMBRE'
+  | 'ING_DIA_META'
+  | 'ING_DIA_LIBRES'
   | 'FIJ_LISTA'
   | 'FIJ_MONTO'
   | 'FIJ_DIA'
@@ -39,7 +42,7 @@ export type Pantalla =
 
 const PANTALLAS: Pantalla[] = [
   'BIE', 'REP', 'QUI', 'QUI_FAM', 'ING_TIPO', 'ING_MONTO', 'ING_FREC', 'ING_QUIEN', 'ING_VAR', 'ING_CONSEJO', 'ING_OTRO', 'ING_TOTAL',
-  'FIJ_LISTA', 'FIJ_MONTO', 'FIJ_DIA', 'FIJ_TOTAL', 'VAR_LISTA', 'VAR_MONTO', 'VAR_SUGIERE', 'VAR_TOTAL',
+  'ING_DIA_NOMBRE', 'ING_DIA_META', 'ING_DIA_LIBRES', 'FIJ_LISTA', 'FIJ_MONTO', 'FIJ_DIA', 'FIJ_TOTAL', 'VAR_LISTA', 'VAR_MONTO', 'VAR_SUGIERE', 'VAR_TOTAL',
   'AHO_LISTA', 'AHO_META', 'AHO_CUOTA', 'AHO_NOSE', 'REV_PIENSA', 'REV_RESUMEN', 'REV_META', 'REC_PREGUNTA', 'REC_CUANDO', 'FIN',
 ]
 
@@ -56,6 +59,9 @@ export const PASO_DE: Record<Pantalla, number> = {
   ING_CONSEJO: 3,
   ING_OTRO: 3,
   ING_TOTAL: 3,
+  ING_DIA_NOMBRE: 3,
+  ING_DIA_META: 3,
+  ING_DIA_LIBRES: 3,
   FIJ_LISTA: 4,
   FIJ_MONTO: 4,
   FIJ_DIA: 4,

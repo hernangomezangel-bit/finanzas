@@ -76,6 +76,8 @@ export interface PlanPresupuesto {
   para: 'personal' | 'familiar'
   categorias: CategoriaPlan[]
   ingresos: { nombre: string; categoria: string; monto: number; dia: number }[]
+  /** Trabajos por días (Didi…): meta de cada día trabajado y días de la semana de descanso. */
+  fuentes: { nombre: string; categoria: string; metaDiaria: number; diasLibres: number[] }[]
   fijos: { nombre: string; categoria: string; monto: number; dia: number }[]
   /** Lo planeado para gastos variables, sumado por categoría. */
   topes: { categoria: string; monto: number }[]
@@ -146,8 +148,23 @@ export function planDelPresupuesto(b: Borrador, hoy: string): PlanPresupuesto {
   const desde = primerDiaDeMes(hoy)
   const categorias: CategoriaPlan[] = []
 
-  const ingresos = ingresosActivos(b)
-    .filter(esIngresoCompleto)
+  const completos = ingresosActivos(b).filter(esIngresoCompleto)
+
+  // Los trabajos por días (Didi…) se crean como «meta diaria» de la app, que pregunta cada día y proyecta el mes.
+  const fuentes = completos
+    .filter((i) => i.frecuencia === 'diaria')
+    .map((i) => {
+      agregarCategoria(categorias, { ...CATEGORIA_INGRESO_VARIABLE, tipo: 'ingreso', variable: true })
+      return {
+        nombre: i.etiqueta.slice(0, 40),
+        categoria: CATEGORIA_INGRESO_VARIABLE.nombre,
+        metaDiaria: i.monto,
+        diasLibres: [...new Set(i.diasLibres ?? [])].sort((x, y) => x - y),
+      }
+    })
+
+  const ingresos = completos
+    .filter((i) => i.frecuencia !== 'diaria')
     .map((i) => {
       const base = i.variable ? CATEGORIA_INGRESO_VARIABLE : (CATEGORIA_INGRESO[i.tipo ?? 'otro'] ?? CATEGORIA_INGRESO.otro)
       agregarCategoria(categorias, { ...base, tipo: 'ingreso', ...(i.variable ? { variable: true } : {}) })
@@ -193,6 +210,7 @@ export function planDelPresupuesto(b: Borrador, hoy: string): PlanPresupuesto {
     para: b.para ?? 'personal',
     categorias,
     ingresos,
+    fuentes,
     fijos,
     topes: [...topesPorCategoria].map(([categoria, monto]) => ({ categoria, monto })),
     metas,
