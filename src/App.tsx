@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { iniciarRevisionDeAvisos } from './avisosApp'
 import { iniciarSincronizacion } from './programados'
 import Presupuesto from './pantallas/Presupuesto'
+import AccesoTico from './componentes/AccesoTico'
 import Ahorros from './pantallas/Ahorros'
+import Asistente from './pantallas/Asistente'
 import Avisos from './pantallas/Avisos'
 import Categorias from './pantallas/Categorias'
 import Deudas from './pantallas/Deudas'
@@ -24,6 +26,7 @@ const PESTANAS: { id: Pestana; icono: string; nombre: string }[] = [
 export default function App() {
   const [activa, setActiva] = useState<Pestana>('presupuesto')
   const actual = PESTANAS.find((p) => p.id === activa)!
+  const [asistente, setAsistente] = useState(false)
 
   // Mantiene al día los gastos programados (cuotas de deudas y ahorros) mientras la app está abierta.
   useEffect(() => iniciarSincronizacion(), [])
@@ -37,12 +40,13 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} />}
+        {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} abrirAsistente={() => setAsistente(true)} />}
         {activa === 'porpagar' && <PorPagar />}
         {activa === 'ahorros' && <Ahorros />}
         {activa === 'deudas' && <Deudas />}
         {activa === 'mas' && (
           <>
+            <AccesoTico alAbrir={() => setAsistente(true)} />
             <Respaldo />
             <IngresosPorDia />
             <Recurrentes />
@@ -65,6 +69,8 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {asistente && <Asistente alCerrar={() => setAsistente(false)} />}
     </div>
   )
 }

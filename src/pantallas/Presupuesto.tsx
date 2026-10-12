@@ -6,6 +6,7 @@ import { hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import { estaPendiente } from '../programadosPuro'
+import AccesoTico from '../componentes/AccesoTico'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
 import ListaMovimientos from '../componentes/ListaMovimientos'
 import PendientesJornadas from '../componentes/PendientesJornadas'
@@ -19,7 +20,7 @@ const COLORES = ['var(--acento)','#d97706', '#2563eb', '#be185d', '#7c3aed', '#6
 
 type Formulario = { movimiento?: Movimiento } | null
 
-export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }) {
+export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespaldo: () => void; abrirAsistente: () => void }) {
   const [mes, setMes] = useState(mesDe(hoy()))
   const [formulario, setFormulario] = useState<Formulario>(null)
   const [repitiendo, setRepitiendo] = useState(false)
@@ -81,6 +82,7 @@ export default function Presupuesto({ irARespaldo }: { irARespaldo: () => void }
   return (
     <>
       <AvisoRespaldo alIr={irARespaldo} />
+      <AccesoTico alAbrir={abrirAsistente} />
       <PendientesJornadas />
       <PorRegistrar />
 
