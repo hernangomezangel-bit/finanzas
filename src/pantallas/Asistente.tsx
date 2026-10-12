@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { borradorNuevo, guardarBorrador, leerBorrador, PASO_DE, type Borrador, type Pantalla } from '../asistente/borrador'
 import { ETIQUETAS, NOMBRES_PASO } from '../asistente/textos'
+import { AhorroCuota, AhorroLista, AhorroMeta, AhorroNose } from './asistente/Ahorro'
+import { GastosDia, GastosLista, GastosMonto, GastosTotal, VariablesSugiere } from './asistente/Gastos'
 import { Bienvenida, ParaQuien, ParaQuienFamilia } from './asistente/Inicio'
 import {
   IngresoConsejo,
@@ -29,6 +31,18 @@ const PANTALLAS: Record<Pantalla, ComponentType<PropsPantalla>> = {
   ING_CONSEJO: IngresoConsejo,
   ING_OTRO: IngresoOtro,
   ING_TOTAL: IngresoTotal,
+  FIJ_LISTA: (p) => <GastosLista {...p} tipo="fijos" />,
+  FIJ_MONTO: (p) => <GastosMonto {...p} tipo="fijos" />,
+  FIJ_DIA: GastosDia,
+  FIJ_TOTAL: (p) => <GastosTotal {...p} tipo="fijos" />,
+  VAR_LISTA: (p) => <GastosLista {...p} tipo="variables" />,
+  VAR_MONTO: (p) => <GastosMonto {...p} tipo="variables" />,
+  VAR_SUGIERE: VariablesSugiere,
+  VAR_TOTAL: (p) => <GastosTotal {...p} tipo="variables" />,
+  AHO_LISTA: AhorroLista,
+  AHO_META: AhorroMeta,
+  AHO_CUOTA: AhorroCuota,
+  AHO_NOSE: AhorroNose,
   PRONTO: Pronto,
 }
 
@@ -53,7 +67,7 @@ export default function Asistente({ alCerrar }: { alCerrar: () => void }) {
 
   const props: PropsPantalla = {
     borrador,
-    cambiar: (cambio) => actualizar(() => cambio),
+    cambiar: (cambio) => actualizar(typeof cambio === 'function' ? cambio : () => cambio),
     editarIngreso: (cambio) =>
       actualizar((previo) => ({
         ingresos: previo.ingresos.map((ingreso, i) => (i === previo.indice ? { ...ingreso, ...cambio } : ingreso)),
@@ -65,7 +79,13 @@ export default function Asistente({ alCerrar }: { alCerrar: () => void }) {
           ? { indice: previo.indice + 1 }
           : { ingresos: [...previo.ingresos, {}], indice: previo.indice + 1 },
       ),
-    ir: (pantalla) => actualizar((previo) => ({ historial: [...previo.historial, previo.pantalla], pantalla })),
+    ir: (pantalla, posicion) =>
+      actualizar((previo) => ({
+        historial: [...previo.historial, previo.pantalla],
+        posiciones: [...previo.posiciones, previo.posicion],
+        pantalla,
+        ...(posicion !== undefined ? { posicion } : {}),
+      })),
     cerrar: alCerrar,
   }
 
@@ -73,7 +93,13 @@ export default function Asistente({ alCerrar }: { alCerrar: () => void }) {
     actualizar((previo) => {
       const anterior = previo.historial[previo.historial.length - 1]
       if (!anterior) return {}
-      const cambio: Partial<Borrador> = { pantalla: anterior, historial: previo.historial.slice(0, -1) }
+      const cambio: Partial<Borrador> = {
+        pantalla: anterior,
+        historial: previo.historial.slice(0, -1),
+        posiciones: previo.posiciones.slice(0, -1),
+        // Vuelve a la pregunta de la lista en la que iba en esa pantalla.
+        posicion: previo.posiciones[previo.posiciones.length - 1] ?? 0,
+      }
       // Si vuelve desde el principio de un ingreso nuevo, regresa al ingreso anterior. Lo que ya había escrito en el
       // nuevo se conserva: si vuelve a decir que tiene otro ingreso, lo retoma.
       if (previo.pantalla === 'ING_TIPO' && previo.indice > 0 && anterior === 'ING_OTRO') cambio.indice = previo.indice - 1

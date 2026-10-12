@@ -68,12 +68,14 @@ export const MENSAJES = {
   VAL_01: { expresion: 'explicando', texto: 'Me falta este dato. Si no lo sabes, pon un estimado.' },
   VAL_02: { expresion: 'explicando', texto: 'Ese valor no me cuadra. Escribe un monto mayor a cero.' },
   VAL_03: { expresion: 'pensando', texto: '¿Seguro que son {monto}? Revisa que no sobre un cero.' },
+  VAL_04: { expresion: 'explicando', texto: 'Escribe un día entre 1 y 31, o toca «No sé».' },
+  VAL_05: { expresion: 'explicando', texto: 'Marca al menos una opción para seguir.' },
   SAL_01: { expresion: 'explicando', texto: '¿Guardamos lo que llevas para seguir después?' },
   RET_01: { expresion: 'feliz', texto: '¡Hola de nuevo! Íbamos en {nombre_paso}. ¿Seguimos?' },
   REP_01: { expresion: 'pensando', texto: 'Ya tienes un presupuesto creado. ¿Quieres reemplazarlo por uno nuevo?' },
 
   // Provisional de la Fase 1: se quita cuando estén los pasos siguientes.
-  TMP_01: { expresion: 'feliz', texto: 'Por ahora llegamos hasta aquí: tus ingresos ya quedaron anotados. Los gastos y el ahorro vienen pronto.' },
+  TMP_01: { expresion: 'feliz', texto: 'Por ahora llegamos hasta aquí: ingresos, gastos y ahorro ya quedaron anotados. La revisión viene pronto.' },
 } satisfies Record<string, Mensaje>
 
 export type IdMensaje = keyof typeof MENSAJES
@@ -113,6 +115,22 @@ export const ETIQUETAS = {
   ingresoOtroEjemplo: 'Ej: Venta de comida',
   quienEtiqueta: 'Quién lo recibe (opcional)',
   quienEjemplo: 'Ej: Papá',
+  montoEtiqueta: 'Monto al mes',
+  otroGastoNombre: 'Escribe cuál es',
+  otroGastoEjemplo: 'Ej: Gimnasio',
+  diaEtiqueta: 'Día del mes (1 a 31)',
+  diaEjemplo: 'Ej: 5',
+  noSe: 'No sé',
+  saltarEsta: 'Saltar esta',
+  resumenDia: 'día {dia}',
+  resumenSinDia: 'sin día fijo',
+  totalFijos: 'Total fijos al mes',
+  totalVariables: 'Total variables al mes',
+  sinGastos: 'No marcaste ninguno por ahora.',
+  metaNombre: 'Nombre de la meta',
+  metaNombreEjemplo: 'Ej: Viaje a Cartagena',
+  metaObjetivo: 'Cuánto necesitas (opcional)',
+  cuotaEtiqueta: 'Aporte al mes',
   resumenAlMes: '{monto} al mes',
   resumenQuincenal: '2 pagos de {monto}',
   resumenSemanal: 'Cada semana {monto}',
@@ -128,6 +146,48 @@ export const OPCIONES_INGRESO = [
   { id: 'pension', etiqueta: 'Pensión' },
   { id: 'otro', etiqueta: 'Otro' },
 ]
+
+/** Gastos fijos (Paso 4): los que se pagan cada mes casi por el mismo valor. `otro` abre un campo de texto. */
+export const OPCIONES_FIJOS = [
+  { id: 'arriendo', etiqueta: 'Arriendo o hipoteca' },
+  { id: 'administracion', etiqueta: 'Administración' },
+  { id: 'servicios', etiqueta: 'Servicios (agua, luz, gas)' },
+  { id: 'internet', etiqueta: 'Internet y celular' },
+  { id: 'transporte', etiqueta: 'Transporte' },
+  { id: 'colegio', etiqueta: 'Colegio o universidad' },
+  { id: 'creditos', etiqueta: 'Cuotas de créditos' },
+  { id: 'seguros', etiqueta: 'Seguros y salud' },
+  { id: 'otro', etiqueta: 'Otro' },
+]
+
+/** Gastos variables (Paso 5): los que cambian cada mes. `otro` abre un campo de texto. */
+export const OPCIONES_VARIABLES = [
+  { id: 'mercado', etiqueta: 'Mercado' },
+  { id: 'comidas', etiqueta: 'Comidas fuera y domicilios' },
+  { id: 'ropa', etiqueta: 'Ropa' },
+  { id: 'salud', etiqueta: 'Salud y farmacia' },
+  { id: 'entretenimiento', etiqueta: 'Entretenimiento' },
+  { id: 'mascotas', etiqueta: 'Mascotas' },
+  { id: 'cuidado', etiqueta: 'Cuidado personal' },
+  { id: 'regalos', etiqueta: 'Regalos y celebraciones' },
+  { id: 'imprevistos', etiqueta: 'Imprevistos' },
+  { id: 'otro', etiqueta: 'Otro' },
+]
+
+/** Para qué quiere ahorrar (Paso 6). `nose` no se combina con las demás. */
+export const OPCIONES_AHORRO = [
+  { id: 'fondo', etiqueta: 'Fondo de emergencia' },
+  { id: 'meta', etiqueta: 'Una meta (viaje, carro, estudio…)' },
+  { id: 'inversion', etiqueta: 'Inversión' },
+  { id: 'nose', etiqueta: 'Todavía no sé' },
+]
+
+/** El nombre con el que arranca cada meta; «Una meta» empieza vacía para que la persona la nombre. */
+export const NOMBRE_META_INICIAL: Record<string, string> = {
+  fondo: 'Fondo de emergencia',
+  meta: '',
+  inversion: 'Inversión',
+}
 
 /** Cada cuánto llega un ingreso. */
 export const OPCIONES_FRECUENCIA = [

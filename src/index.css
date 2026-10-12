@@ -485,6 +485,8 @@ details.tarjeta > summary + .jornada { margin-top: 10px; }
   color: var(--texto); font: inherit; font-size: 1rem; text-align: left; cursor: pointer;
 }
 .opcion-tico.elegida { border-color: var(--acento); border-width: 2px; background: color-mix(in srgb, var(--acento) 10%, var(--tarjeta)); font-weight: 600; }
+.opcion-tico.marcable { display: flex; align-items: center; gap: 12px; }
+.opcion-tico .marca { font-size: 1.3rem; line-height: 1; color: var(--acento); }
 .aviso-tico { margin: 0; padding: 8px 12px; border-radius: 10px; background: #fef3c7; color: #92400e; font-size: 0.9rem; }
 @media (prefers-color-scheme: dark) {
   .aviso-tico { background: color-mix(in srgb, #f59e0b 22%, var(--tarjeta)); color: #fcd34d; }

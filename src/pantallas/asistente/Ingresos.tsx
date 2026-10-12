@@ -250,13 +250,13 @@ export function IngresoTotal({ borrador, ir }: PropsPantalla) {
             <strong>{monto(total)}</strong>
           </li>
         </ul>
-        <button className="boton primario" disabled={total <= 0} onClick={() => ir('PRONTO')}>{ETIQUETAS.continuar}</button>
+        <button className="boton primario" disabled={total <= 0} onClick={() => ir('FIJ_LISTA')}>{ETIQUETAS.continuar}</button>
       </div>
     </>
   )
 }
 
-/** Provisional de la Fase 1: los pasos siguientes todavía no están. */
+/** Provisional: la revisión, los recordatorios y el cierre todavía no están. */
 export function Pronto({ cerrar }: PropsPantalla) {
   return (
     <>
