@@ -255,15 +255,3 @@ export function IngresoTotal({ borrador, ir }: PropsPantalla) {
     </>
   )
 }
-
-/** Provisional: la revisión, los recordatorios y el cierre todavía no están. */
-export function Pronto({ cerrar }: PropsPantalla) {
-  return (
-    <>
-      <GloboTico mensaje={mensaje('TMP_01')} />
-      <div className="respuesta-tico">
-        <button className="boton primario" onClick={cerrar}>Cerrar</button>
-      </div>
-    </>
-  )
-}

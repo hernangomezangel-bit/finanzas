@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { crearCalendarioDePagos } from '../avisosDatos'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { crearCalendarioDePagos, guardarConfigAvisos, leerConfigAvisos } from '../avisosDatos'
 import { activarAvisos, desactivarAvisos, leerEstadoAvisos, probarAviso, type EstadoAvisos } from '../avisosApp'
 
 type Mensaje = { tipo: 'ok' | 'error'; texto: string } | null
@@ -12,7 +13,18 @@ const TEXTO: Record<EstadoAvisos, string> = {
   activo: 'Avisos activados: un día antes y el mismo día de cada pago.',
 }
 
+/** Con cuánta anticipación se puede avisar. */
+const ANTICIPACIONES = [
+  { dias: [0, 1], etiqueta: 'El mismo día y 1 día antes' },
+  { dias: [0], etiqueta: 'El mismo día' },
+  { dias: [1], etiqueta: '1 día antes' },
+  { dias: [3], etiqueta: '3 días antes' },
+]
+
+const mismosDias = (a: number[], b: number[]) => a.length === b.length && a.every((d, i) => d === b[i])
+
 export default function Avisos() {
+  const config = useLiveQuery(leerConfigAvisos)
   const [estado, setEstado] = useState<EstadoAvisos | null>(null)
   const [mensaje, setMensaje] = useState<Mensaje>(null)
 
@@ -76,6 +88,35 @@ export default function Avisos() {
           {activo && <button className="boton secundario" onClick={probar}>Ver un aviso de prueba</button>}
           {activo && <button className="boton secundario" onClick={apagar}>Desactivar revisión en segundo plano</button>}
         </>
+      )}
+
+      {config && (
+        <div className="campo">
+          ¿Cuándo te aviso?
+          <div className="chips" role="group" aria-label="Con cuánta anticipación">
+            {ANTICIPACIONES.map((o) => (
+              <button
+                key={o.etiqueta}
+                className={mismosDias(config.dias, o.dias) ? 'chip activo' : 'chip'}
+                aria-pressed={mismosDias(config.dias, o.dias)}
+                onClick={() => void guardarConfigAvisos({ ...config, dias: o.dias })}
+              >
+                {o.etiqueta}
+              </button>
+            ))}
+          </div>
+          <label className="casilla">
+            <input
+              type="checkbox"
+              checked={config.estiloTico}
+              onChange={(e) => void guardarConfigAvisos({ ...config, estiloTico: e.target.checked })}
+            />
+            <span>
+              Avisos con la voz de Tico
+              <small>Un aviso por cada pago: «Tico te recuerda: mañana vence arriendo por $1.200.000».</small>
+            </span>
+          </label>
+        </div>
       )}
 
       <p className="explicacion">

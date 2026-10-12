@@ -29,12 +29,18 @@ export type Pantalla =
   | 'AHO_META'
   | 'AHO_CUOTA'
   | 'AHO_NOSE'
-  | 'PRONTO'
+  | 'REV_PIENSA'
+  | 'REV_RESUMEN'
+  | 'REV_META'
+  | 'REC_PREGUNTA'
+  | 'REC_CUANDO'
+  | 'FIN'
+  | 'REP'
 
 const PANTALLAS: Pantalla[] = [
-  'BIE', 'QUI', 'QUI_FAM', 'ING_TIPO', 'ING_MONTO', 'ING_FREC', 'ING_QUIEN', 'ING_VAR', 'ING_CONSEJO', 'ING_OTRO', 'ING_TOTAL',
+  'BIE', 'REP', 'QUI', 'QUI_FAM', 'ING_TIPO', 'ING_MONTO', 'ING_FREC', 'ING_QUIEN', 'ING_VAR', 'ING_CONSEJO', 'ING_OTRO', 'ING_TOTAL',
   'FIJ_LISTA', 'FIJ_MONTO', 'FIJ_DIA', 'FIJ_TOTAL', 'VAR_LISTA', 'VAR_MONTO', 'VAR_SUGIERE', 'VAR_TOTAL',
-  'AHO_LISTA', 'AHO_META', 'AHO_CUOTA', 'AHO_NOSE', 'PRONTO',
+  'AHO_LISTA', 'AHO_META', 'AHO_CUOTA', 'AHO_NOSE', 'REV_PIENSA', 'REV_RESUMEN', 'REV_META', 'REC_PREGUNTA', 'REC_CUANDO', 'FIN',
 ]
 
 /** A qué paso (1 a 9) pertenece cada pantalla, para la barra de progreso. */
@@ -62,7 +68,13 @@ export const PASO_DE: Record<Pantalla, number> = {
   AHO_META: 6,
   AHO_CUOTA: 6,
   AHO_NOSE: 6,
-  PRONTO: 6,
+  REV_PIENSA: 7,
+  REV_RESUMEN: 7,
+  REV_META: 7,
+  REC_PREGUNTA: 8,
+  REC_CUANDO: 8,
+  FIN: 9,
+  REP: 1,
 }
 
 export type TipoPresupuesto = 'personal' | 'familiar'
@@ -84,9 +96,16 @@ export interface Borrador {
   fijos: ListaGastos
   variables: ListaGastos
   ahorro: DatosAhorro
+  /** Si decidió sumar lo que sobra a una de sus metas: a cuál y cuánto. */
+  extraAhorro: { meta: string; monto: number } | null
+  /** Si quiere recordatorios de sus pagos fijos y con cuánta anticipación (0 = el mismo día). */
+  recordatorio: { activo: boolean; diasAntes: 0 | 1 | 3 } | null
 }
 
 const CLAVE = 'tico-borrador'
+
+/** Marca que, la primera vez que se abra Presupuesto después de crearlo, Tico explique qué se ve ahí (FIN_02). */
+export const CLAVE_FIN_02 = 'tico-fin02'
 
 /** Los ingresos que cuentan: hasta el que se está respondiendo. Si volvió atrás, los siguientes quedan guardados pero no suman. */
 export function ingresosActivos(borrador: Borrador): IngresoBorrador[] {
@@ -106,6 +125,8 @@ export function borradorNuevo(): Borrador {
     fijos: listaVacia(),
     variables: listaVacia(),
     ahorro: ahorroVacio(),
+    extraAhorro: null,
+    recordatorio: null,
   }
 }
 
@@ -124,14 +145,19 @@ function esEnteroNoNegativo(valor: unknown): valor is number {
 export function validarBorrador(dato: unknown): Borrador | null {
   if (typeof dato !== 'object' || dato === null) return null
   const d = dato as Record<string, unknown>
-  if (d.version !== 1 || !esPantalla(d.pantalla)) return null
-  if (!Array.isArray(d.historial) || !d.historial.every(esPantalla)) return null
+  // Antes de la revisión había una pantalla provisional («PRONTO»): se sigue desde la revisión.
+  const actualizar = (p: unknown) => (p === 'PRONTO' ? 'REV_PIENSA' : p)
+  const pantalla = actualizar(d.pantalla)
+  if (!esPantalla(pantalla) || d.version !== 1) return null
+  if (!Array.isArray(d.historial)) return null
+  const historial: unknown[] = d.historial.map(actualizar)
+  if (!historial.every(esPantalla)) return null
   if (d.para !== null && d.para !== 'personal' && d.para !== 'familiar') return null
   if (!Array.isArray(d.ingresos) || d.ingresos.length === 0 || !d.ingresos.every((i) => typeof i === 'object' && i !== null)) return null
   if (!esEnteroNoNegativo(d.indice) || d.indice >= d.ingresos.length) return null
 
-  const posiciones = d.posiciones === undefined ? d.historial.map(() => 0) : d.posiciones
-  if (!Array.isArray(posiciones) || posiciones.length !== d.historial.length || !posiciones.every(esEnteroNoNegativo)) return null
+  const posiciones = d.posiciones === undefined ? historial.map(() => 0) : d.posiciones
+  if (!Array.isArray(posiciones) || posiciones.length !== historial.length || !posiciones.every(esEnteroNoNegativo)) return null
   const posicion = d.posicion === undefined ? 0 : d.posicion
   if (!esEnteroNoNegativo(posicion)) return null
 
@@ -140,7 +166,18 @@ export function validarBorrador(dato: unknown): Borrador | null {
   const ahorro = d.ahorro === undefined ? ahorroVacio() : d.ahorro
   if (!esListaGastos(fijos) || !esListaGastos(variables) || !esDatosAhorro(ahorro)) return null
 
-  return { ...(d as unknown as Borrador), posiciones, posicion, fijos, variables, ahorro }
+  const extra = d.extraAhorro === undefined ? null : d.extraAhorro
+  if (extra !== null) {
+    const e = extra as Record<string, unknown>
+    if (typeof extra !== 'object' || typeof e.meta !== 'string' || typeof e.monto !== 'number' || !Number.isInteger(e.monto) || e.monto <= 0) return null
+  }
+  const recordatorio = d.recordatorio === undefined ? null : d.recordatorio
+  if (recordatorio !== null) {
+    const r = recordatorio as Record<string, unknown>
+    if (typeof recordatorio !== 'object' || typeof r.activo !== 'boolean' || (r.diasAntes !== 0 && r.diasAntes !== 1 && r.diasAntes !== 3)) return null
+  }
+
+  return { ...(d as unknown as Borrador), pantalla, historial: historial as Pantalla[], posiciones, posicion, fijos, variables, ahorro, extraAhorro: extra as Borrador['extraAhorro'], recordatorio: recordatorio as Borrador['recordatorio'] }
 }
 
 export function leerBorrador(): Borrador | null {

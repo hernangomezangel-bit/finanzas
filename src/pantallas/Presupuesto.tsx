@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Movimiento } from '../db'
 import { pesos } from '../formato'
-import { hoy, mesDe, moverMes, nombreMes } from '../fechas'
+import { fechaDia, hoy, mesDe, moverMes, nombreMes } from '../fechas'
 import { useResumenesJornadas } from '../fuentes'
 import { usePromedioVariable } from '../ingresos'
 import { estaPendiente } from '../programadosPuro'
 import AccesoTico from '../componentes/AccesoTico'
 import AvisoRespaldo from '../componentes/AvisoRespaldo'
+import AvisoTico from '../componentes/AvisoTico'
 import ListaMovimientos from '../componentes/ListaMovimientos'
 import PendientesJornadas from '../componentes/PendientesJornadas'
 import PorRegistrar from '../componentes/PorRegistrar'
@@ -24,6 +25,7 @@ export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespal
   const [mes, setMes] = useState(mesDe(hoy()))
   const [formulario, setFormulario] = useState<Formulario>(null)
   const [repitiendo, setRepitiendo] = useState(false)
+  const [categoriaAbierta, setCategoriaAbierta] = useState<number | null>(null)
 
   const movimientos = useLiveQuery(
     () => db.movimientos.where('fecha').between(`${mes}-01`, `${mes}-32`).reverse().sortBy('fecha'),
@@ -57,13 +59,20 @@ export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespal
   for (const m of movimientos) {
     if (m.tipo === 'gasto') gastoPorCategoria.set(m.categoriaId, (gastoPorCategoria.get(m.categoriaId) ?? 0) + m.monto)
   }
-  const tajadas: Tajada[] = [...gastoPorCategoria]
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, valor], i) => ({
-      nombre: porId.get(id)?.nombre ?? 'Sin categoría',
-      valor,
-      color: COLORES[i % COLORES.length],
-    }))
+  const ordenadas = [...gastoPorCategoria].sort((a, b) => b[1] - a[1])
+  const tajadas: Tajada[] = ordenadas.map(([id, valor], i) => ({
+    nombre: porId.get(id)?.nombre ?? 'Sin categoría',
+    valor,
+    color: COLORES[i % COLORES.length],
+  }))
+  const colorDe = new Map(ordenadas.map(([id], i) => [id, COLORES[i % COLORES.length]]))
+  // Las categorías con gasto este mes y las que tienen un tope, aunque todavía no lleven nada gastado.
+  const filasCategoria = categorias
+    .filter((c) => c.tipo === 'gasto' && (gastoPorCategoria.has(c.id!) || c.tope !== undefined))
+    .map((c) => ({ id: c.id!, nombre: c.nombre, icono: c.icono, gastado: gastoPorCategoria.get(c.id!) ?? 0, tope: c.tope }))
+    .sort((a, b) => b.gastado - a.gastado || a.nombre.localeCompare(b.nombre))
+  // Lo que falta por gastar de lo planeado en las categorías con tope: así el balance se compara con lo que se espera.
+  const gastoPlaneadoPorGastar = filasCategoria.reduce((s, f) => (f.tope !== undefined ? s + Math.max(0, f.tope - f.gastado) : s), 0)
 
   // Los gastos incluyen lo que la app programó sola (cuotas de deudas y ahorros, gastos e ingresos fijos) y lo que
   // registraste con fecha futura. Eso cuenta en el mes, pero todavía no está pagado ni recibido: se muestra aparte.
@@ -83,6 +92,7 @@ export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespal
     <>
       <AvisoRespaldo alIr={irARespaldo} />
       <AccesoTico alAbrir={abrirAsistente} />
+      <AvisoTico />
       <PendientesJornadas />
       <PorRegistrar />
 
@@ -132,6 +142,12 @@ export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespal
               Mira la pestaña «Por pagar» para ver lo que falta y cuánto te quedaría.
             </small>
           )}
+          {gastoPlaneadoPorGastar > 0 && (
+            <small className="detalle-dato">
+              Aún te falta gastar {pesos(gastoPlaneadoPorGastar)} de lo que planeaste por categoría. Si lo gastas todo, el balance sería{' '}
+              {pesos(balance - gastoPlaneadoPorGastar)}.
+            </small>
+          )}
         </div>
       </div>
 
@@ -154,19 +170,59 @@ export default function Presupuesto({ irARespaldo, abrirAsistente }: { irARespal
         </section>
       )}
 
-      {tajadas.length > 0 && (
+      {filasCategoria.length > 0 && (
         <section className="tarjeta">
           <h2>Gastos por categoría</h2>
-          <Dona tajadas={tajadas} centro={pesos(gastos)} />
-          <ul className="leyenda">
-            {tajadas.map((t) => (
-              <li key={t.nombre}>
-                <i style={{ background: t.color }} aria-hidden="true" />
-                <span>{t.nombre}</span>
-                <span className="porcentaje">{Math.round((t.valor / gastos) * 100)}%</span>
-                <strong>{pesos(t.valor)}</strong>
-              </li>
-            ))}
+          {tajadas.length > 0 && <Dona tajadas={tajadas} centro={pesos(gastos)} />}
+          <ul className="lista-categorias">
+            {filasCategoria.map((f) => {
+              const abierta = categoriaAbierta === f.id
+              const sobre = f.tope !== undefined && f.gastado > f.tope
+              const delaCategoria = movimientos.filter((m) => m.tipo === 'gasto' && m.categoriaId === f.id)
+              return (
+                <li key={f.id}>
+                  <button className="fila-categoria" aria-expanded={abierta} onClick={() => setCategoriaAbierta(abierta ? null : f.id)}>
+                    <span className="linea-categoria">
+                      <i style={{ background: colorDe.get(f.id) ?? 'var(--borde)' }} aria-hidden="true" />
+                      <span className="nombre-categoria">{f.icono} {f.nombre}</span>
+                      <span className="porcentaje">{gastos > 0 ? Math.round((f.gastado / gastos) * 100) : 0}%</span>
+                      <strong>{pesos(f.gastado)}</strong>
+                    </span>
+                    {f.tope !== undefined && (
+                      <>
+                        <span className="barra-tope" aria-hidden="true">
+                          <i className={sobre ? 'sobre' : undefined} style={{ width: `${Math.min(100, (f.gastado / f.tope) * 100)}%` }} />
+                        </span>
+                        <small className={sobre ? 'texto-tope sobre' : 'texto-tope'}>
+                          {sobre
+                            ? `Planeado ${pesos(f.tope)} · te pasaste ${pesos(f.gastado - f.tope)}`
+                            : `Planeado ${pesos(f.tope)} · te quedan ${pesos(f.tope - f.gastado)}`}
+                        </small>
+                      </>
+                    )}
+                  </button>
+                  {abierta && (
+                    <ul className="detalle-categoria">
+                      {delaCategoria.length === 0 ? (
+                        <li className="vacio">Todavía no hay gastos en esta categoría este mes.</li>
+                      ) : (
+                        delaCategoria.map((m) => (
+                          <li key={m.id}>
+                            <button onClick={() => setFormulario({ movimiento: m })}>
+                              <span>
+                                {m.nota || f.nombre}
+                                <small>{fechaDia(m.fecha)}{estaPendiente(m, hoyTexto) ? ' · por pagar' : ''}</small>
+                              </span>
+                              <strong className="gasto">−{pesos(m.monto)}</strong>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}

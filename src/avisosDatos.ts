@@ -1,7 +1,17 @@
 import Dexie from 'dexie'
-import { avisosDelDia, crearIcs, pagosPendientes, type Aviso, type MovimientoParaAvisar } from './avisos'
-import { db } from './db'
-import { diaSiguiente, hoy } from './fechas'
+import { avisosPorDias, avisosTico, crearIcs, DIAS_DE_AVISO_POR_DEFECTO, pagosPendientes, sumarDias, type Aviso, type MovimientoParaAvisar } from './avisos'
+import { db, type ConfigAvisos } from './db'
+import { hoy } from './fechas'
+
+/** Cuándo y cómo avisar. Si nunca se eligió, el mismo día y un día antes, con el texto de siempre. */
+export async function leerConfigAvisos(): Promise<ConfigAvisos> {
+  const ajuste = await db.ajustes.get('avisos')
+  return ajuste?.clave === 'avisos' ? ajuste.valor : { dias: DIAS_DE_AVISO_POR_DEFECTO, estiloTico: false }
+}
+
+export async function guardarConfigAvisos(config: ConfigAvisos): Promise<void> {
+  await db.ajustes.put({ clave: 'avisos', valor: config })
+}
 
 // Lo que une los avisos con la base de datos. Lo usan la app y el service worker (que corre con la app cerrada).
 
@@ -42,10 +52,12 @@ async function leerMovimientos(desde: string, hasta: string): Promise<Movimiento
 export async function revisarAvisos(mostrar: (aviso: Aviso) => Promise<void>, ahora: Date = new Date()): Promise<number> {
   if (ahora.getHours() < HORA_MINIMA) return 0
   const dia = hoy()
-  const manana = diaSiguiente(dia)
-  const pagos = pagosPendientes(await leerMovimientos(dia, manana), dia, dia, manana)
+  const config = await leerConfigAvisos()
+  const hasta = sumarDias(dia, Math.max(...config.dias))
+  const pagos = pagosPendientes(await leerMovimientos(dia, hasta), dia, dia, hasta)
   const yaEnviados = new Set((await baseAvisos.enviados.toArray()).map((e) => e.clave))
-  const nuevos = avisosDelDia(pagos, dia, manana).filter((a) => !yaEnviados.has(a.clave))
+  const avisos = config.estiloTico ? avisosTico(pagos, dia, config.dias) : avisosPorDias(pagos, dia, config.dias)
+  const nuevos = avisos.filter((a) => !yaEnviados.has(a.clave))
   for (const aviso of nuevos) {
     await mostrar(aviso)
     await baseAvisos.enviados.put({ clave: aviso.clave, dia })

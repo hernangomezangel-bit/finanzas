@@ -4,6 +4,8 @@ import { mensaje } from '../../asistente/mensajes'
 import { ETIQUETAS, NOMBRE_META_INICIAL, OPCIONES_AHORRO } from '../../asistente/textos'
 import CampoMonto from '../../componentes/CampoMonto'
 import { GloboTico } from '../../componentes/Tico'
+import { superaLosIngresos } from '../../asistente/presupuesto'
+import AvisoMontoAlto from './AvisoMontoAlto'
 import ListaMarcar from './ListaMarcar'
 import type { PropsPantalla } from './tipos'
 
@@ -15,7 +17,7 @@ function metaActual(props: PropsPantalla): string | undefined {
 /** Quién sigue después de la meta número `posicion`: la siguiente, o el siguiente paso. */
 function siguiente(props: PropsPantalla, posicion: number) {
   if (posicion + 1 < metasElegidas(props.borrador.ahorro).length) return props.ir('AHO_META', posicion + 1)
-  props.ir('PRONTO')
+  props.ir('REV_PIENSA')
 }
 
 /** Paso 6 · ¿Para qué quieres ahorrar? (se pueden marcar varias) */
@@ -106,14 +108,18 @@ export function AhorroCuota(props: PropsPantalla) {
   const id = metaActual(props)
   const [tocado, setTocado] = useState(false)
   const [error, setError] = useState<'VAL_01' | 'VAL_02' | null>(null)
+  const [confirmando, setConfirmando] = useState(false)
   if (!id) return <MetaPerdida {...props} />
   const datos = borrador.ahorro.metas[id]
   const valor = datos?.cuota ?? 0
 
   function continuar() {
     if (valor <= 0) return setError(tocado ? 'VAL_02' : 'VAL_01')
+    if (superaLosIngresos(borrador, valor)) return setConfirmando(true)
     siguiente(props, borrador.posicion)
   }
+
+  if (confirmando) return <AvisoMontoAlto valor={valor} alConfirmar={() => siguiente(props, borrador.posicion)} alCorregir={() => setConfirmando(false)} />
 
   return (
     <>
@@ -142,7 +148,7 @@ export function AhorroNose({ ir }: PropsPantalla) {
     <>
       <GloboTico mensaje={mensaje('AHO_04')} />
       <div className="respuesta-tico">
-        <button className="boton primario" onClick={() => ir('PRONTO')}>{ETIQUETAS.continuar}</button>
+        <button className="boton primario" onClick={() => ir('REV_PIENSA')}>{ETIQUETAS.continuar}</button>
       </div>
     </>
   )
@@ -152,7 +158,7 @@ export function AhorroNose({ ir }: PropsPantalla) {
 function MetaPerdida({ ir }: PropsPantalla) {
   return (
     <div className="respuesta-tico">
-      <button className="boton primario" onClick={() => ir('PRONTO')}>{ETIQUETAS.continuar}</button>
+      <button className="boton primario" onClick={() => ir('REV_PIENSA')}>{ETIQUETAS.continuar}</button>
     </div>
   )
 }

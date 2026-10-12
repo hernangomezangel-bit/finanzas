@@ -52,7 +52,11 @@ export const MENSAJES = {
   REV_02: { expresion: 'celebrando', texto: '¡Muy bien! Te quedan {sobrante} libres. ¿Qué hacemos con ellos?' },
   REV_03: { expresion: 'celebrando', texto: '¡Perfecto! Cada peso tiene una tarea asignada.' },
   REV_04: { expresion: 'preocupado', texto: 'Ojo: lo planeado supera lo que entra en {faltante}. No pasa nada, ajustemos juntos.' },
-  REV_05: { expresion: 'explicando', texto: 'Una guía común es la regla 50/30/20: 50 % para necesidades, 30 % para gustos y 20 % para ahorro. Es una referencia, no una obligación.' },
+  // REV_05 va en dos globos para no pasar de unos 120 caracteres: REV_05 y REV_05B se muestran juntos.
+  REV_05: { expresion: 'explicando', texto: 'Una guía común es la regla 50/30/20: 50 % para necesidades, 30 % para gustos y 20 % para ahorro.' },
+  REV_05B: { expresion: 'explicando', texto: 'Es una referencia, no una obligación.' },
+
+  REV_06: { expresion: 'explicando', texto: '¿A cuál meta los sumamos?' },
 
   // Paso 8 · Recordatorios
   REC_01: { expresion: 'explicando', texto: '¿Quieres que te recuerde tus pagos fijos para que no se te pase ninguno?' },
@@ -74,8 +78,9 @@ export const MENSAJES = {
   RET_01: { expresion: 'feliz', texto: '¡Hola de nuevo! Íbamos en {nombre_paso}. ¿Seguimos?' },
   REP_01: { expresion: 'pensando', texto: 'Ya tienes un presupuesto creado. ¿Quieres reemplazarlo por uno nuevo?' },
 
-  // Provisional de la Fase 1: se quita cuando estén los pasos siguientes.
-  TMP_01: { expresion: 'feliz', texto: 'Por ahora llegamos hasta aquí: ingresos, gastos y ahorro ya quedaron anotados. La revisión viene pronto.' },
+  // Mientras se crea el presupuesto (Paso 9) y si algo sale mal al crearlo.
+  FIN_00: { expresion: 'pensando', texto: 'Estoy armando tu presupuesto…' },
+  FIN_ERR: { expresion: 'explicando', texto: 'No pude crear el presupuesto. Tus respuestas siguen guardadas: probemos otra vez.' },
 } satisfies Record<string, Mensaje>
 
 export type IdMensaje = keyof typeof MENSAJES
@@ -131,6 +136,38 @@ export const ETIQUETAS = {
   metaNombreEjemplo: 'Ej: Viaje a Cartagena',
   metaObjetivo: 'Cuánto necesitas (opcional)',
   cuotaEtiqueta: 'Aporte al mes',
+  // Paso 7 · Revisión
+  resumenIngresos: 'Ingresos',
+  resumenFijos: 'Gastos fijos',
+  resumenVariables: 'Gastos variables',
+  resumenAhorro: 'Ahorro',
+  resumenLibre: 'Queda libre',
+  resumenFalta: 'Falta',
+  sumarAhorro: 'Sumarlos a mi ahorro',
+  dejarLibres: 'Dejarlos libres',
+  aQueMeta: '¿A cuál meta los sumamos?',
+  verReferencia: 'Ver una referencia',
+  ocultarReferencia: 'Ocultar la referencia',
+  editar: 'Editar',
+  guardar: 'Guardar',
+  ajustarTitulo: 'Los que más pesan',
+  // Paso 8 · Recordatorios
+  mismoDia: 'El mismo día',
+  unDiaAntes: '1 día antes',
+  tresDiasAntes: '3 días antes',
+  // Paso 9 · Cierre
+  verPresupuesto: 'Ver mi presupuesto',
+  reintentar: 'Intentar de nuevo',
+  entendido: 'Entendido',
+  // Mensajes generales
+  guardarSalir: 'Guardar y salir',
+  seguirAqui: 'Seguir aquí',
+  seguir: 'Seguir',
+  empezarDeNuevo: 'Empezar de nuevo',
+  reemplazar: 'Reemplazar',
+  cancelar: 'Cancelar',
+  siEstaBien: 'Sí, está bien',
+  corregir: 'Corregir',
   resumenAlMes: '{monto} al mes',
   resumenQuincenal: '2 pagos de {monto}',
   resumenSemanal: 'Cada semana {monto}',
@@ -188,6 +225,13 @@ export const NOMBRE_META_INICIAL: Record<string, string> = {
   meta: '',
   inversion: 'Inversión',
 }
+
+/** Con cuánta anticipación avisar de los pagos fijos (Paso 8). Los días son antes del vencimiento. */
+export const OPCIONES_ANTICIPACION: { dias: 0 | 1 | 3; etiqueta: string }[] = [
+  { dias: 0, etiqueta: 'El mismo día' },
+  { dias: 1, etiqueta: '1 día antes' },
+  { dias: 3, etiqueta: '3 días antes' },
+]
 
 /** Cada cuánto llega un ingreso. */
 export const OPCIONES_FRECUENCIA = [

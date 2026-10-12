@@ -1,5 +1,7 @@
 // Qué avisar y cómo: los pagos de hoy y de mañana, y el archivo de calendario con recordatorios. Es código puro (sin
 // pantalla ni base de datos), así se puede probar solo y lo usan igual la app y el service worker.
+import { monto as montoTico, rellenar } from './asistente/mensajes.ts'
+import { MENSAJES } from './asistente/textos.ts'
 import { pesos } from './formato.ts'
 import { estaPendiente } from './programadosPuro.ts'
 
@@ -46,16 +48,68 @@ function aviso(clave: string, cuando: string, pagos: Pago[]): Aviso {
   return { clave, titulo: `${cuando}: ${cuentas} · ${pesos(total)}`, texto: lineas(pagos) }
 }
 
+/** La fecha que queda `dias` días después de otra (AAAA-MM-DD). */
+export function sumarDias(fecha: string, dias: number): string {
+  const [a, m, d] = fecha.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
+}
+
+/** Con qué anticipación avisa por defecto: el mismo día y un día antes. */
+export const DIAS_DE_AVISO_POR_DEFECTO = [0, 1]
+
+function cuandoEsElAviso(dias: number): { clave: string; titulo: string } {
+  if (dias === 0) return { clave: 'hoy', titulo: 'Hoy toca pagar' }
+  if (dias === 1) return { clave: 'manana', titulo: 'Mañana toca pagar' }
+  return { clave: `en${dias}`, titulo: `En ${dias} días toca pagar` }
+}
+
 /**
- * Los avisos de ese día: uno con lo que se paga hoy y otro con lo que se paga mañana (solo si hay algo). Cada uno se
- * manda una sola vez por día, aunque la app revise varias veces.
+ * Los avisos de ese día, uno por cada anticipación elegida: lo que se paga ese mismo día, mañana, en 3 días… (solo si
+ * hay algo). Cada uno se manda una sola vez por día, aunque la app revise varias veces.
  */
-export function avisosDelDia(pendientes: Pago[], hoy: string, manana: string): Aviso[] {
+export function avisosPorDias(pendientes: Pago[], hoy: string, dias: number[] = DIAS_DE_AVISO_POR_DEFECTO): Aviso[] {
   const avisos: Aviso[] = []
-  const deHoy = pendientes.filter((p) => p.fecha === hoy)
-  const deManana = pendientes.filter((p) => p.fecha === manana)
-  if (deHoy.length > 0) avisos.push(aviso(`hoy|${hoy}`, 'Hoy toca pagar', deHoy))
-  if (deManana.length > 0) avisos.push(aviso(`manana|${hoy}`, 'Mañana toca pagar', deManana))
+  for (const d of [...new Set(dias)].sort((x, y) => x - y)) {
+    const fecha = sumarDias(hoy, d)
+    const delDia = pendientes.filter((p) => p.fecha === fecha)
+    if (delDia.length === 0) continue
+    const { clave, titulo } = cuandoEsElAviso(d)
+    avisos.push(aviso(`${clave}|${hoy}`, titulo, delDia))
+  }
+  return avisos
+}
+
+/** Lo que se paga hoy y mañana (la anticipación de siempre). */
+export function avisosDelDia(pendientes: Pago[], hoy: string): Aviso[] {
+  return avisosPorDias(pendientes, hoy, DIAS_DE_AVISO_POR_DEFECTO)
+}
+
+/** «hoy», «mañana» o «en 3 días», según la anticipación. */
+export function cuandoVence(dias: number): string {
+  return dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`
+}
+
+/** El nombre de un pago dentro de una frase: «arriendo»; los que empiezan con sigla o nombre propio se dejan igual. */
+function nombreEnFrase(nombre: string): string {
+  return /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(nombre) ? nombre.charAt(0).toLowerCase() + nombre.slice(1) : nombre
+}
+
+/**
+ * Los avisos con la voz de Tico: uno por cada pago, con el texto «Tico te recuerda: mañana vence arriendo por $1.200.000».
+ * Cada pago se avisa una sola vez por cada anticipación elegida.
+ */
+export function avisosTico(pendientes: Pago[], hoy: string, dias: number[]): Aviso[] {
+  const avisos: Aviso[] = []
+  for (const d of [...new Set(dias)].sort((x, y) => x - y)) {
+    const fecha = sumarDias(hoy, d)
+    for (const p of pendientes.filter((x) => x.fecha === fecha)) {
+      avisos.push({
+        clave: `tico|${hoy}|${p.id}|${d}`,
+        titulo: 'Tico',
+        texto: rellenar(MENSAJES.REC_03.texto, { cuando: cuandoVence(d), categoria: nombreEnFrase(p.nombre), monto: montoTico(p.monto) }),
+      })
+    }
+  }
   return avisos
 }
 

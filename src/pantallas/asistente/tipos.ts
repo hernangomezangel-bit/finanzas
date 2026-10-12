@@ -15,6 +15,14 @@ export interface PropsPantalla {
    * indica qué pregunta de la lista se responde en la pantalla nueva.
    */
   ir: (pantalla: Pantalla, posicion?: number) => void
+  /** Cambia de pantalla sin dejar la actual en el historial (para pantallas de paso, como «estoy sumando todo»). */
+  reemplazar: (pantalla: Pantalla) => void
+  /** Vuelve a la pantalla anterior. */
+  volver: () => void
+  /** Si Tico ya había creado un presupuesto antes. */
+  hayPresupuesto: boolean
   /** Cierra el asistente (el progreso queda guardado). */
   cerrar: () => void
+  /** Cierra el asistente y abre la pantalla de Presupuesto. */
+  verPresupuesto: () => void
 }

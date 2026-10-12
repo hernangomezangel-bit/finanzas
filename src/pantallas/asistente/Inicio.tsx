@@ -4,13 +4,27 @@ import { GloboTico } from '../../componentes/Tico'
 import type { PropsPantalla } from './tipos'
 
 /** Paso 1 · Bienvenida. */
-export function Bienvenida({ ir, cerrar }: PropsPantalla) {
+export function Bienvenida({ ir, cerrar, hayPresupuesto }: PropsPantalla) {
   return (
     <>
       <GloboTico mensaje={mensaje('BIE_01')} />
       <div className="respuesta-tico">
-        <button className="boton primario" onClick={() => ir('QUI')}>{ETIQUETAS.empecemos}</button>
+        {/* Si Tico ya creó un presupuesto, antes de seguir se pregunta si se reemplaza. */}
+        <button className="boton primario" onClick={() => ir(hayPresupuesto ? 'REP' : 'QUI')}>{ETIQUETAS.empecemos}</button>
         <button className="boton secundario" onClick={cerrar}>{ETIQUETAS.ahoraNo}</button>
+      </div>
+    </>
+  )
+}
+
+/** Paso 1 · Ya existe un presupuesto creado por Tico: ¿se reemplaza por uno nuevo? */
+export function Reemplazo({ ir, cerrar }: PropsPantalla) {
+  return (
+    <>
+      <GloboTico mensaje={mensaje('REP_01')} />
+      <div className="respuesta-tico">
+        <button className="boton primario" onClick={() => ir('QUI')}>{ETIQUETAS.reemplazar}</button>
+        <button className="boton secundario" onClick={cerrar}>{ETIQUETAS.cancelar}</button>
       </div>
     </>
   )

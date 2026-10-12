@@ -16,6 +16,8 @@ export interface Categoria {
   clave?: 'ahorro' | 'deudas'
   /** Solo ingresos: dinero esporádico que cambia cada mes (comisiones, trabajos por fuera). */
   variable?: boolean
+  /** Solo gastos: lo que se planea gastar en esta categoría cada mes (pesos). Presupuesto muestra cuánto va gastado frente a eso. */
+  tope?: number
 }
 
 export interface Movimiento {
@@ -187,10 +189,31 @@ export interface PagoDeuda {
   omitida?: boolean
 }
 
-/** Preferencias del plan de deudas; viajan en la copia de seguridad. */
+/** Lo que creó el asistente de Tico, para poder reemplazarlo sin tocar lo que la persona hizo a mano. */
+export interface PresupuestoTico {
+  /** Día en que se creó (AAAA-MM-DD). */
+  creadoEn: string
+  para: 'personal' | 'familiar'
+  recurrenteIds: number[]
+  metaIds: number[]
+  /** Categorías a las que el asistente les puso un tope mensual. */
+  categoriasConTope: number[]
+}
+
+/** Cuándo y cómo avisar de los pagos que vienen. */
+export interface ConfigAvisos {
+  /** Con cuántos días de anticipación se avisa (0 = el mismo día). */
+  dias: number[]
+  /** Si los avisos usan el texto de Tico, un aviso por pago. */
+  estiloTico: boolean
+}
+
+/** Preferencias de la app; viajan en la copia de seguridad. */
 export type Ajuste =
   | { clave: 'deudaExtra'; valor: number }
   | { clave: 'deudaEstrategia'; valor: Estrategia }
+  | { clave: 'asistentePresupuesto'; valor: PresupuestoTico }
+  | { clave: 'avisos'; valor: ConfigAvisos }
 
 export const CATEGORIA_AHORRO: Categoria = {
   nombre: 'Ahorro e inversión',

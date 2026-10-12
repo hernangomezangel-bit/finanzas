@@ -27,6 +27,8 @@ export default function App() {
   const [activa, setActiva] = useState<Pestana>('presupuesto')
   const actual = PESTANAS.find((p) => p.id === activa)!
   const [asistente, setAsistente] = useState(false)
+  // Al terminar el asistente, Presupuesto se vuelve a armar para que muestre lo que Tico acaba de crear (y su explicación).
+  const [vistaPresupuesto, setVistaPresupuesto] = useState(0)
 
   // Mantiene al día los gastos programados (cuotas de deudas y ahorros) mientras la app está abierta.
   useEffect(() => iniciarSincronizacion(), [])
@@ -40,7 +42,7 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        {activa === 'presupuesto' && <Presupuesto irARespaldo={() => setActiva('mas')} abrirAsistente={() => setAsistente(true)} />}
+        {activa === 'presupuesto' && <Presupuesto key={vistaPresupuesto} irARespaldo={() => setActiva('mas')} abrirAsistente={() => setAsistente(true)} />}
         {activa === 'porpagar' && <PorPagar />}
         {activa === 'ahorros' && <Ahorros />}
         {activa === 'deudas' && <Deudas />}
@@ -70,7 +72,16 @@ export default function App() {
         ))}
       </nav>
 
-      {asistente && <Asistente alCerrar={() => setAsistente(false)} />}
+      {asistente && (
+        <Asistente
+          alCerrar={() => setAsistente(false)}
+          alVerPresupuesto={() => {
+            setAsistente(false)
+            setActiva('presupuesto')
+            setVistaPresupuesto((v) => v + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

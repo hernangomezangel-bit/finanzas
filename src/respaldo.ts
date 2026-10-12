@@ -32,8 +32,9 @@ import type { TipoTasa } from './plan'
  * Versión 10: los recurrentes pueden repetirse todos los días o por días de la semana, no solo por días del mes.
  * Versión 11: los recurrentes pueden cobrarse por día trabajado, con días de descanso (el total del mes de una vez).
  * Versión 12: las deudas pueden ser préstamos sin interés ni pago mensual (sin cuota).
+ * Versión 13: las categorías de gasto pueden tener un tope mensual, y se guardan lo que creó el asistente de Tico y cuándo avisar de los pagos.
  */
-export const VERSION_RESPALDO = 12
+export const VERSION_RESPALDO = 13
 const TAMANO_MAXIMO = 20 * 1024 * 1024
 
 export interface Respaldo {
@@ -116,6 +117,7 @@ function validarCategoria(c: unknown, i: number): Categoria {
   if (c.oculta !== undefined && typeof c.oculta !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
   if (c.clave !== undefined && c.clave !== 'ahorro' && c.clave !== 'deudas') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
   if (c.variable !== undefined && typeof c.variable !== 'boolean') return falla(`La categoría "${c.nombre}" tiene un dato no válido.`)
+  if (c.tope !== undefined && (!esEntero(c.tope) || c.tope <= 0 || c.tipo !== 'gasto')) return falla(`La categoría "${c.nombre}" tiene un tope no válido.`)
   return {
     id: c.id,
     nombre: c.nombre,
@@ -124,6 +126,7 @@ function validarCategoria(c: unknown, i: number): Categoria {
     ...(c.oculta ? { oculta: true } : {}),
     ...(c.clave ? { clave: c.clave } : {}),
     ...(c.variable ? { variable: true } : {}),
+    ...(c.tope !== undefined ? { tope: c.tope as number } : {}),
   }
 }
 
@@ -380,6 +383,22 @@ function validarAjuste(a: unknown, i: number): Ajuste {
   if (a.clave === 'deudaExtra' && esEntero(a.valor) && a.valor >= 0) return { clave: 'deudaExtra', valor: a.valor }
   if (a.clave === 'deudaEstrategia' && (a.valor === 'bola' || a.valor === 'avalancha')) {
     return { clave: 'deudaEstrategia', valor: a.valor }
+  }
+  if (a.clave === 'asistentePresupuesto' && esObjeto(a.valor)) {
+    const v = a.valor
+    const ids = (x: unknown): x is number[] => Array.isArray(x) && x.every((n) => esEntero(n) && n > 0)
+    if (esFechaValida(v.creadoEn) && (v.para === 'personal' || v.para === 'familiar') && ids(v.recurrenteIds) && ids(v.metaIds) && ids(v.categoriasConTope)) {
+      return {
+        clave: 'asistentePresupuesto',
+        valor: { creadoEn: v.creadoEn, para: v.para, recurrenteIds: v.recurrenteIds, metaIds: v.metaIds, categoriasConTope: v.categoriasConTope },
+      }
+    }
+  }
+  if (a.clave === 'avisos' && esObjeto(a.valor)) {
+    const v = a.valor
+    if (Array.isArray(v.dias) && v.dias.length >= 1 && v.dias.length <= 4 && v.dias.every((d) => esEntero(d) && d >= 0 && d <= 7) && typeof v.estiloTico === 'boolean') {
+      return { clave: 'avisos', valor: { dias: [...new Set(v.dias as number[])].sort((x, y) => x - y), estiloTico: v.estiloTico } }
+    }
   }
   return falla(`La preferencia ${i + 1} no es válida.`)
 }

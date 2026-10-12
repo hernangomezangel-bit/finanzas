@@ -15,6 +15,8 @@ import { mensaje, monto } from '../../asistente/mensajes'
 import { ETIQUETAS, OPCIONES_FIJOS, OPCIONES_VARIABLES, type IdMensaje } from '../../asistente/textos'
 import CampoMonto from '../../componentes/CampoMonto'
 import { GloboTico } from '../../componentes/Tico'
+import { superaLosIngresos } from '../../asistente/presupuesto'
+import AvisoMontoAlto from './AvisoMontoAlto'
 import ListaMarcar from './ListaMarcar'
 import type { PropsPantalla } from './tipos'
 
@@ -104,14 +106,23 @@ export function GastosMonto(props: PropsPantalla & { tipo: TipoGastos }) {
   // Distingue «no escribió nada» de «escribió cero» para decir el mensaje que corresponde.
   const [tocado, setTocado] = useState(false)
   const [error, setError] = useState<'VAL_01' | 'VAL_02' | null>(null)
+  const [confirmando, setConfirmando] = useState(false)
   if (!item) return <PreguntaPerdida props={props} tipo={tipo} />
   const valor = borrador[tipo].datos[item.id]?.monto ?? 0
 
-  function continuar() {
-    if (valor <= 0) return setError(tocado ? 'VAL_02' : 'VAL_01')
+  function avanzar() {
     if (tipo === 'fijos') return ir('FIJ_DIA')
     siguiente(props, tipo, borrador.posicion)
   }
+
+  function continuar() {
+    if (valor <= 0) return setError(tocado ? 'VAL_02' : 'VAL_01')
+    // Un gasto mayor que todo lo que entra: se confirma antes de seguir.
+    if (superaLosIngresos(borrador, valor)) return setConfirmando(true)
+    avanzar()
+  }
+
+  if (confirmando) return <AvisoMontoAlto valor={valor} alConfirmar={avanzar} alCorregir={() => setConfirmando(false)} />
 
   function saltar() {
     cambiarLista(props, tipo, (l) => editarDatos(l, item.id, { saltado: true }))
